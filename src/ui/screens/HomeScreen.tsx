@@ -72,7 +72,7 @@ export function HomeScreen({ records, onAdd, onOpen, demo }: {
         </>
       ) : null}
 
-      <SectionTitle note="棒が無い月は未登録です">手取りの推移</SectionTitle>
+      <SectionTitle note="「–」の月は未登録。0円は線上の印で表示します">手取りの推移</SectionTitle>
       <Card>
         <TrendChart key={year} records={records} initialYear={year} />
       </Card>

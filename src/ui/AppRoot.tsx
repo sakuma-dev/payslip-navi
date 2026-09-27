@@ -226,6 +226,7 @@ export function AppRoot() {
                 onStartDemo={startDemo}
                 onStopDemo={requestStopDemo}
                 replaceAll={data.replaceAll}
+                refresh={data.refresh}
               />
             );
   }

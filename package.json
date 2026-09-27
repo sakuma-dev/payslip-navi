@@ -19,7 +19,9 @@
     "test:e2e": "npm run export:web && node .github/scripts/run-web-e2e.mjs",
     "doctor": "expo-doctor",
     "check:deps": "expo install --check",
-    "export:web": "expo export --platform web"
+    "export:web": "expo export --platform web",
+    "export:android": "expo export --platform android --output-dir dist/android",
+    "export:ios": "expo export --platform ios --output-dir dist/ios"
   },
   "dependencies": {
     "@expo/metro-runtime": "~57.0.16",

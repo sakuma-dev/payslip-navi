@@ -19,6 +19,7 @@ export interface AppData {
   retry: () => Promise<void>;
   startDemo: () => Promise<void>;
   stopDemo: () => Promise<void>;
+  refresh: () => Promise<Payslip[]>;
   save: (record: Payslip) => Promise<Payslip[]>;
   remove: (id: string) => Promise<Payslip[]>;
   replaceAll: (records: Payslip[]) => Promise<Payslip[]>;
@@ -148,6 +149,8 @@ export function useAppData(): AppData {
     }
   }, []);
 
+  // 書込結果を確認できなかったときに、保存先から一覧を読み直す。
+  const refresh = useCallback(() => run(async () => undefined), [run]);
   const save = useCallback((record: Payslip) => run((repo) => repo.save(record)), [run]);
   const remove = useCallback((id: string) => run((repo) => repo.remove(id)), [run]);
   const replaceAll = useCallback(
@@ -155,5 +158,5 @@ export function useAppData(): AppData {
     [run],
   );
 
-  return { mode, phase, records, busy, retry, startDemo, stopDemo, save, remove, replaceAll };
+  return { mode, phase, records, busy, retry, startDemo, stopDemo, refresh, save, remove, replaceAll };
 }

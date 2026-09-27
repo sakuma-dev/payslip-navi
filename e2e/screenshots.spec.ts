@@ -9,6 +9,8 @@ test('capture fictional Web preview at phone size', async ({ page }) => {
   await page.getByRole('button', { name: 'サンプル（架空データ）で体験する' }).click();
   await expect(page.getByText('デモ（架空データ）表示中')).toBeVisible();
   await page.screenshot({ path: '.local/screenshots/demo-home.png', fullPage: true });
+  await page.getByText('手取りの推移').evaluate((element) => element.scrollIntoView({ block: 'center' }));
+  await page.screenshot({ path: '.local/screenshots/demo-home-trend.png', fullPage: true });
 
   await page.getByRole('button', { name: 'デモを終了' }).click();
   await expect(page.getByText('まだ明細がありません')).toBeVisible();

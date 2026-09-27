@@ -7,17 +7,19 @@ import { Banner, Button, Card, Dialog, Divider, Field, SectionTitle } from '../c
 import { errorMessage } from '../format';
 import { colors, space, type } from '../theme';
 
-type Notice = { tone: 'success' | 'danger' | 'warning'; title: string; body: string } | null;
+type Notice = { tone: 'success' | 'danger' | 'warning' | 'info'; title: string; body: string; reload?: boolean } | null;
 
-export function SettingsScreen({ records, demo, busy, onStartDemo, onStopDemo, replaceAll }: {
+export function SettingsScreen({ records, demo, busy, onStartDemo, onStopDemo, replaceAll, refresh }: {
   records: Payslip[];
   demo: boolean;
   busy: boolean;
   onStartDemo: () => void;
   onStopDemo: () => void;
   replaceAll: (records: Payslip[]) => Promise<Payslip[]>;
+  refresh: () => Promise<Payslip[]>;
 }) {
   const [notice, setNotice] = useState<Notice>(null);
+  const [reloading, setReloading] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [reading, setReading] = useState(false);
@@ -32,7 +34,12 @@ export function SettingsScreen({ records, demo, busy, onStartDemo, onStopDemo, r
     try {
       await shareBackup(serializeBackup(records, new Date().toISOString()));
       setExportOpen(false);
-      setNotice({ tone: 'success', title: 'バックアップを書き出しました', body: `${records.length}件。保存先はあなたが選んだ場所です。取り扱いにご注意ください。` });
+      // shareBackup は共有画面の取消や保存の成否を返さないため、保存済みとは表示しない。
+      setNotice({
+        tone: 'info',
+        title: '書き出しの操作を終えました',
+        body: `${records.length}件分のファイルを共有・保存の画面に渡しました。取り消した場合や保存先によっては保存されていません。選んだ保存先にファイルがあるか確認してください。ファイルには金額がそのまま入っています。`,
+      });
     } catch (e) {
       setNotice({ tone: 'danger', title: '書き出せませんでした', body: errorMessage(e) });
     } finally {
@@ -77,7 +84,13 @@ export function SettingsScreen({ records, demo, busy, onStartDemo, onStopDemo, r
       setNotice({ tone: 'success', title: '復元しました', body: `保存後に読み直して${reloaded.length}件を確認しました。` });
     } catch (e) {
       setPending(null);
-      setNotice({ tone: 'danger', title: '復元できませんでした', body: `${errorMessage(e)}\n置き換えは取り消され、元のデータのままです。` });
+      // 書込後の再読込で失敗した場合など、置換が完了している可能性がある。原状維持を断定しない。
+      setNotice({
+        tone: 'warning',
+        title: '復元の結果を確認できませんでした',
+        body: `${errorMessage(e)}\n置き換えが完了している場合と、元のデータのままの場合があります。一覧を読み直して件数と内容を確認してください。`,
+        reload: true,
+      });
     } finally {
       setRestoring(false);
     }
@@ -89,18 +102,46 @@ export function SettingsScreen({ records, demo, busy, onStartDemo, onStopDemo, r
       const reloaded = await replaceAll([]);
       setWipeOpen(false);
       setWipeText('');
-      setNotice({ tone: 'success', title: 'すべて削除しました', body: `現在の件数: ${reloaded.length}件` });
+      setNotice({ tone: 'success', title: 'すべて削除しました', body: `読み直した現在の件数: ${reloaded.length}件` });
     } catch (e) {
       setWipeOpen(false);
-      setNotice({ tone: 'danger', title: '削除できませんでした', body: `${errorMessage(e)}\nデータは変更されていません。` });
+      setWipeText('');
+      setNotice({
+        tone: 'warning',
+        title: '削除の結果を確認できませんでした',
+        body: `${errorMessage(e)}\n削除が完了している場合と、データが残っている場合があります。一覧を読み直して確認してください。`,
+        reload: true,
+      });
     } finally {
       setWiping(false);
     }
   };
 
+  const doReload = async () => {
+    setReloading(true);
+    try {
+      const list = await refresh();
+      setNotice({ tone: 'info', title: '一覧を読み直しました', body: `端末内の現在の件数: ${list.length}件。内容は履歴で確認できます。` });
+    } catch (e) {
+      setNotice({ tone: 'danger', title: '読み直せませんでした', body: `${errorMessage(e)}\nアプリを再起動して確認してください。`, reload: true });
+    } finally {
+      setReloading(false);
+    }
+  };
+
   return (
     <View>
-      {notice ? <Banner tone={notice.tone} title={notice.title}>{notice.body}</Banner> : null}
+      {notice ? (
+        <Banner
+          tone={notice.tone}
+          title={notice.title}
+          action={notice.reload
+            ? <Button label={reloading ? '読み直し中…' : '一覧を読み直す'} variant="secondary" compact busy={reloading} onPress={doReload} />
+            : undefined}
+        >
+          {notice.body}
+        </Banner>
+      ) : null}
 
       <SectionTitle>体験モード</SectionTitle>
       <Card tone={demo ? 'demo' : 'default'}>
@@ -211,7 +252,7 @@ export function SettingsScreen({ records, demo, busy, onStartDemo, onStopDemo, r
           <Text style={{ fontWeight: '700' }}>{pending?.payslips.length ?? 0}件</Text>に置き換えます。
         </Text>
         <Text style={[type.caption, { marginTop: space.sm }]}>
-          途中で失敗した場合は置き換えを取り消し、元のデータのまま残します。
+          書き込みの途中で失敗した場合は、置き換えを取り消す仕組みです。結果を確認できなかった場合は、一覧を読み直すよう案内します。
         </Text>
       </Dialog>
 

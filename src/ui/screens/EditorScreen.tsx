@@ -311,7 +311,10 @@ export function EditorScreen({ session, records, demo, onSave, onSaved, onCancel
                   差額は自動で埋めません。明細に記載がある調整だけを追加するか、入力した値を見直してください。
                 </Text>
                 <View style={styles.fixActions}>
-                  <Button label="調整項目を追加" variant="secondary" compact onPress={() => addItem('adjustment')} />
+                  {/* 調整項目で解消できるのは差引支給額の不一致だけ。項目合計の不一致には出さない。 */}
+                  {totalsIssues.some((i) => normalizePath(i.path) === 'netPay') ? (
+                    <Button label="調整項目を追加" variant="secondary" compact onPress={() => addItem('adjustment')} />
+                  ) : null}
                   <Button label="合計を見直す" variant="ghost" compact onPress={() => grossRef.current?.focus()} />
                 </View>
               </>
@@ -333,7 +336,8 @@ export function EditorScreen({ session, records, demo, onSave, onSaved, onCancel
         ) : null}
       </Card>
 
-      {saveError ? <Banner tone="danger" title="保存できませんでした">{saveError}</Banner> : null}
+      {/* 書込後の再読込失敗では保存済みの可能性があるため、未保存と断定しない。同じIDで再試行しても重複しない。 */}
+      {saveError ? <Banner tone="danger" title="保存でエラーが発生しました">{saveError}</Banner> : null}
 
       <View style={{ gap: space.sm, marginTop: space.sm }}>
         <Button

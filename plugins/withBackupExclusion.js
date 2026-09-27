@@ -22,6 +22,8 @@ const fullBackupContent = `<?xml version="1.0" encoding="utf-8"?>
 ${exclusions}
 </full-backup-content>
 `;
+// An Apple signing team is not configured yet. This placeholder is not a real team ID;
+// every cross-platform transfer domain is excluded regardless of the placeholder.
 const extractionRules = `<?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
   <cloud-backup>

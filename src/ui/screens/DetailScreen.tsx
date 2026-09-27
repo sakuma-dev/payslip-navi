@@ -78,7 +78,7 @@ export function DetailScreen({ record, records, demo, onEdit, onDelete }: {
 
       <ComparisonDetail record={record} comparison={comparison} />
 
-      {error ? <Banner tone="danger" title="削除できませんでした">{error}</Banner> : null}
+      {error ? <Banner tone="danger" title="削除でエラーが発生しました">{error}</Banner> : null}
       <View style={{ gap: space.sm, marginTop: space.lg }}>
         <Button label="この明細を編集" variant="secondary" onPress={onEdit} />
         <Button label="この明細を削除" variant="danger" onPress={() => setConfirming(true)} />
