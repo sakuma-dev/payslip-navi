@@ -1,0 +1,10 @@
+node_modules/
+.expo/
+dist/
+.env*
+.local/
+artifacts/
+private/
+private-materials/
+docs/private/
+*.local
