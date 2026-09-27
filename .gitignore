@@ -1,6 +1,11 @@
 node_modules/
 .expo/
 dist/
+android/
+ios/
+coverage/
+playwright-report/
+test-results/
 .env*
 .local/
 artifacts/
@@ -8,3 +13,39 @@ private/
 private-materials/
 docs/private/
 *.local
+*.log
+
+# Personal payslip images and documents. Only original UI assets and
+# explicitly fictional screenshots are permitted in the public repository.
+*.png
+*.jpg
+*.jpeg
+*.heic
+*.heif
+*.webp
+*.tif
+*.tiff
+*.pdf
+!assets/**/*.png
+!assets/**/*.jpg
+!assets/**/*.jpeg
+!assets/**/*.webp
+!docs/screenshots/fictional/**/*.png
+!docs/screenshots/fictional/**/*.jpg
+!docs/screenshots/fictional/**/*.jpeg
+!docs/screenshots/fictional/**/*.webp
+
+# Device databases, journals, and exported personal backups.
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.wal
+*.shm
+*.backup.json
+backup.json
+backup-*.json
+backup_*.json
+payslip-backup*.json
