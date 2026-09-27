@@ -57,7 +57,11 @@ const SAMPLE_PAYSLIPS: Payslip[];
 
 Item idもUUID。新規UIはexpo-cryptoで生成、OCR候補のitem idは呼出側でUUIDに付け替えてよい。parse関数は決定的な仮IDを返せるがbuildPayslipでUUID検証する。sampleは固定UUID・架空と明示。署名/暗号化をしていないbackupであることをUI説明。
 
+全件バックアップが常に2MB以内に収まるよう、保存/置換前に正規化済み全件の出力サイズも検証する。件数・項目数だけが上限内でも出力サイズを超える場合は、既存データを変更せず明示エラーにする。
+
 ラベルはNFKC後最大40文字、制御文字を拒否、空白のみは拒否。confirmed=falseはbuildPayslipでエラー。月別項目差はカテゴリ内でknown code、otherはNFKC/空白除去したlabelを照合キーにする。同キーを合算し片月のみはadded/removedを明示する。括弧金額は手入力/テキストでは負数を許可し、parseOcrでは未確定・警告にする。住民税の出典説明は「横浜市の案内（例）」として自治体や通知書の確認を促す。
+
+Differenceの全金額は常に当月−比較月の符号付き差額。removedでは当月を0として計算する。GUIは削除項目の元金額と誤解させず、「比較月のみ」と差額を表示する。
 
 ## src/services/index.ts
 
