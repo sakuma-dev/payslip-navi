@@ -1,16 +1,15 @@
 # 開発の再開
 
-2026-09-28。
+2026-09-29。初版に続くLiquid Glass UI刷新の完了記録。
 
-- 状態: 初版完了後、`feat/ui-refresh` でUIを改修中。本人の追加依頼によりLiquid Glass風へ方向を更新した。現行要件は `UI-GLASS-BRIEF.md`、受入は `UI-REFRESH-GOAL.md`。
-- UIの現在地: Glass設計08、基盤/ナビ/ホームのレビュー09、Webの読み上げ・強制カラー・動き設定の限定修正まで保存。型/lint・145単体、独立Web E2E29件とWebKit390比較6件が成功。その後に追加した極小区画の公開回帰1件が失敗しているため、全体E2Eは未合格。詳細は `progress/UI-GLASS.md`。
-- UIの次の一手: Opus 5.5 highがSplitBarの固定幅バグG-C1を修正し、公開回帰を通す→設計のG3表に沿って残り7画面の配置を改修→mediumの独立レビュー→全体QA/CI/main共有。既存mainは初版のまま。未承認の刷新を完成扱いでmainへ統合しない。
-- UIチェックポイントのCI: `1cfdf62` でChecks/Native builds成功。Glass依存を含むWeb/Android/iOS production JSと両OS compileまで確認した。これはGlass UIの完成・実機での素材表示の確認ではない。
+- 最終UIコード・公開回帰テスト: `709267530a7e4c4c7355cbb63ba323ae0e030ce1`。後続の完了コミットは文書と架空画面のみ。
+- 設計: `UI-GLASS-BRIEF.md`、`UI-GLASS-DESIGN.md`、`UI-REFRESH-GOAL.md`。既存Expo/React Native、4タブ＋スタック、domain/services/native境界を維持。
+- 実装: Glass基盤・浮遊ナビ/ヘッダー・ホーム、履歴・ガイド・設定・追加方式・確認編集・詳細・初回案内/失敗・確認Dialog。透明度/動き低減と強制色へ対応。
+- レビュー: 06〜11。10のM1〜M3（表示件数、金額欄、狭幅見出し）を修正し11で承認。非UI契約再監査にも重大指摘なし。レビュー11追補と最終QA記録の所見は一致。
+- 検証: 型/lint・145単体・依存整合・3platform JS export・公開E2E Chromium/WebKit各33件成功（任意撮影1件skip）。4幅と設定分岐は独立QA。最終CIの結果とリンクは `VERIFICATION.md`。
+- 画面: `UI-GALLERY.md`。公開画像はすべて架空データのWebプレビュー。参考サイトの画像は製品や公開素材へ転用していない。
+- 次に行う実機確認: 開発ビルドを作り直し、iOS/Androidの素材・safe area・文字拡大・読み上げ・実キーボード、架空の日本語明細でOCR/権限/EXIF、保存と再起動、OSバックアップ除外、共有と復元を確認する。レビュー05末尾とGlass設計§10を参照。
+- 今回未確認: 上記の実機挙動、Webの非同期busy中のフォーカス。コンパイル/Web成功と区別する。課金・同期・APK配布・ストア申請は今回の対象外。
+- 起動: Node.js24、`npm ci`、`npm run web`。Webは再読込で入力が消える。nativeのOCR/永続保存には開発ビルドを使う。詳しくはREADME。
 - リポジトリ: https://github.com/sakuma-dev/payslip-navi
-- 設計: ARCHITECTURE.md。公開インターフェース: CONTRACTS.md。
-- 初版から継続する実機確認: 開発ビルドの実機で架空の日本語明細を使い、写真/カメラ/EXIF、保存と再起動、バックアップ除外、共有と復元を確認する。具体的手順はレビュー05末尾。
-- 完成条件: GOAL.md。
-- 検証: 最終コードcd3d63cでGitHubのChecksとNative buildsが成功。73テスト、型/lint、Expo整合、全3platformのproduction JS export、Web E2E、Android/iOS compileを確認。ローカルでは任意の画面撮影を含むWeb E2E6件が成功。実機のOCR精度・権限・バックアップ挙動は未確認。
-- 詳細: progress/CORE.md、progress/GUI.md、progress/INFRA.md、reviews/05-native-integration-review.md。各記録はその確認時点の状態で、後続修正は最新結果を優先する。
-- 再開時はGitルート・ブランチ・差分・最新レビューを照合する。
-- 個人の端末設定や作業台帳は公開リポジトリの対象外。
+- 再開時はGitルート・ブランチ・差分・最新レビューとCIを照合する。個人の端末設定・作業台帳・参照画像は公開対象外。

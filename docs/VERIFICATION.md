@@ -1,24 +1,38 @@
 # 検証記録
 
-2026-09-28。最終コード: `cd3d63c2b2cebc09630ee3e2b70dbce9fd6d2a0f`。この後の完了記録コミットは文書だけを更新する。
+2026-09-29。Liquid Glass UI刷新の最終コード・公開回帰テストは `709267530a7e4c4c7355cbb63ba323ae0e030ce1`。後続の完了記録は文書と架空画像のみ。変更前の初版は `b60f635`。
 
 | 確認 | 結果 | 根拠 |
 | --- | --- | --- |
-| 型・lint | 成功 | GitHub Checks |
-| 単体・保存統合テスト | 73件成功（コア62・グラフ11） | Vitest、node:sqliteの実DB、native bridgeのモック |
+| 型・lint | 成功、警告なし | ローカルと最終コードのGitHub Checks |
+| 単体・保存統合・UI基盤 | 145件成功 | 9ファイル。実SQLite、native bridgeのモック、数値表示、Glass状態・コントラスト・動き |
 | Expo Doctor・依存整合 | 成功 | Doctor 21項目、expo install --check |
-| Web production export | 成功 | Expo Metro |
-| Android/iOS production JS export | 両方成功 | Hermes bytecode、native adapter/OCR module解決 |
-| Web E2E | CIは5件成功・任意撮影1件skip。ローカルは撮影有効で6件成功 | 手入力・検証・CRUD・デモ分離・JSONの往復・重複月・負値グラフ |
-| Android native compile | 成功 | assembleDebug、ローカルOCRのKotlinコンパイル |
-| iOS simulator compile | 成功 | xcodebuild、OCRのSwiftコンパイル |
-| レビュー | 承認、Critical/Highなし | reviews/01〜05。指摘と対応を保存 |
-| 画面確認 | 架空データの390×844 Web画面を確認 | 正負のグラフ・明細・空状態・確認編集 |
+| Web / Android / iOS production JS export | 全て成功 | 最終コードのGitHub Checks |
+| 公開Web E2E / Chromium | 33件成功、任意撮影1件skip、失敗0 | 修正後の新Web export、GitHub Checksでも成功 |
+| 公開Web E2E / WebKit | 33件成功、任意撮影1件skip、失敗0 | 同じ修正後の新Web export、独立QA |
+| Android native compile | 成功 | 最終コードのNative builds |
+| iOS simulator compile | 成功 | 最終コードのNative builds |
+| 独立レビュー | 11でG3承認、Critical/High/Mediumなし | レビュー10のM1〜M3解消。非UI契約再監査も重大指摘なし |
+| 画面と操作 | 320/390/430/1280幅で確認 | 独立QAの架空データ、実打鍵・フォーカス・末尾・Dialog・貼付入力の幅変更 |
 
-- [最終Checks](https://github.com/sakuma-dev/payslip-navi/actions/runs/36339855188)
-- [最終Native builds](https://github.com/sakuma-dev/payslip-navi/actions/runs/36339855240)
+- [最終コードのChecks](https://github.com/sakuma-dev/payslip-navi/actions/runs/36481607920)
+- [最終コードのNative builds](https://github.com/sakuma-dev/payslip-navi/actions/runs/36481612428)
+- [独立受入れレビュー11](reviews/11-glass-acceptance-review.md)
+- [変更前後と完成画面](UI-GALLERY.md)
 
-## 意味のある失敗ケース
+任意撮影テストのskipは、環境変数で有効にする追加撮影だけです。失敗した回帰をskipへ変更していません。画面撮影は独立QAで別途実施しました。旧チェックポイントの成功を、新しい回帰追加後の合格として流用していません。
+
+## UIで解消した回帰
+
+- **割合帯の極小区画:** 総支給10億円・控除1円の区画を縁が2pxに固定していたため、区画から配置幅を消費する縁を除去。320/390で真の割合との差を1/64px以内で検査し、数値・凡例・強制色の塗り分けは維持。
+- **金額欄:** Web入力の固有の最小幅で「円」が枠外へ押し出されていた。320/390/430の実打鍵後、値・フォーカス・入力と単位の枠内配置を検査。
+- **狭い画面の月・見出し:** 320で支払月「2026-12」が全桁読めること、追加・新規編集・詳細月・既存編集の見出しが横にも縦にも欠けないことを検査。ヘッダーは実測の左右幅と最大2行で配置。
+- **件数の意味:** 設定と削除説明は「表示中の明細」と保存先の範囲を分離。再読込に失敗した場合の古い表示件数を、保存完了の根拠にはしない。結果不明の警告・一覧再読込・確認Dialogは維持。
+- **入力と確認:** 貼付パネルは320では操作の直後に表示。320→390→320の幅変更でも値とフォーカスを保持。破棄・同月置換・削除の確認、Enter連打への対処、取消後の復帰を検査。
+- **注意帯:** 初回の目視報告は元画像の画素再確認で撤回。旧/新の再現12回とA/B8条件で文字の画素を確認し、帯のコードは変更していない。公開E2Eは最終PNG内の警告文字も検査する。
+- **アクセシビリティ:** Webの選択・チェック・開閉状態、強制色の棒/アイコン/境界、透明度・動き低減の初期値と途中変更を検証。実機OSでの設定操作とは区別する。
+
+## 維持した失敗ケースとデータの意味
 
 - 全角・負数・不正な桁区切り、未入力と0、曖昧なOCR、入力上限の拒否。
 - 合計不一致と差額、還付・調整、暦上の前月/前年同月と欠月。
@@ -27,10 +41,15 @@
 - JSONの実ダウンロード→全削除→同ファイル復元→再出力で記録が一致。
 - 同月置換の取消で旧値維持、承諾で1件だけ更新。デモ操作で実データは不変。
 - 大きな正値と小さな負値の混在でも、棒を0線の正しい側へ配置。
+- UI刷新でdomain/services/native OCR/useAppData/chartScaleの契約を変更していない。
 
-## 未確認・初版の制約
+レビュー11の共有前条件は管理担当が照合済み。独立QAの最終記録は同じ7092675の新export（bundle index-76beb9a8cf50afcc519752862ef9c4c6）を対象とし、レビューの所見と一致する。ChecksとNative buildsはどちらも同じソースSHAでsuccess。
 
-- 実機でのOCR精度、EXIFの全方向、権限拒否/取消、端末のOSバックアップの実効性、Android共有先での読込は未確認。レビュー05の手順で確認する。
-- コンパイル成功は実機の動作・読み取り精度を保証しない。公開画像は架空データのWebプレビュー。
+## 未確認・受け入れた制約
+
+- iOS/Android実機でのGlass素材、文字拡大1.6、読み上げ、実ソフトキーボード、busy中のフォーカス、safe areaの実機挙動は未確認。Webの縮小viewportを実キーボードの証拠にはしない。
+- 実機OCR精度、EXIFの全方向、権限拒否/取消、端末OSバックアップの実効性、Android共有先での読込は未確認。レビュー05末尾の手順で確認する。
+- コンパイル成功は実機の描画や読み取り精度を保証しない。公開画像は架空データのWebプレビュー。
+- Webの非同期busy中のフォーカスは未観測（Low）。確認DialogのEnter連打防止・取消・操作へのフォーカス復帰はE2Eで成功。
 - 破損DBは読み出しを止める。アプリ内の破損DB初期化・修復機能は未実装。
-- 通常給与を支払月ごとに1件扱う。賞与・同月複数明細の合算、税額自動判定、課金・同期・ストア配信は初版に含めない。
+- 通常給与を支払月ごとに1件扱う。賞与・同月複数明細の合算、税額自動判定、課金・同期・APK配布・ストア配信は今回に含めない。
