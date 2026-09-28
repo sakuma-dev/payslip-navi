@@ -19,9 +19,9 @@
 
 | 改修前 | Glass基盤・ホーム |
 | --- | --- |
-| ![改修前のホーム](../screenshots/home-before.png) | ![改修途中のGlassホーム](../screenshots/home-glass-progress.png) |
+| ![改修前のホーム](../screenshots/fictional/home-before.png) | ![改修途中のGlassホーム](../screenshots/fictional/home-glass-progress.png) |
 
-[強制カラーdarkの表示](../screenshots/home-forced-colors.png)も確認した。これはアプリに通常のダークテーマを追加したものではない。
+[強制カラーdarkの表示](../screenshots/fictional/home-forced-colors.png)も確認した。これはアプリに通常のダークテーマを追加したものではない。
 
 ## 変更
 
