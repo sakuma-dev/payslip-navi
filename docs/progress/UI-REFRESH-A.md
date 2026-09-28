@@ -136,6 +136,6 @@
 - 修正後に統合担当が型/lint/93テストを再確認し、すべて成功。
 - QA担当が専用サーバーのChromiumで公開E2Eを実行。15件成功、撮影専用1件skip。削除/置換の即Enter安全性とフォーカス復帰、4幅・44px・減動作・極端値を確認した。
 - 390×844でplot上端651px、nav上端768px。上半分の可視条件 `651 + 72 <= 768` を満たす。読み上げツリーにも前月の年月と差額が残る。
-- 第1段階の `fae084b` ではGitHub ChecksとAndroid/iOS Native buildsが成功。後から追加したGlass依存は別のcompile確認が必要。
+- 第1段階の `fae084b` でGitHub ChecksとAndroid/iOS Native buildsが成功。修正とGlass依存を含む `1cfdf62` でも [Checks](https://github.com/sakuma-dev/payslip-navi/actions/runs/36413151534) と [Native builds](https://github.com/sakuma-dev/payslip-navi/actions/runs/36413154519) が成功した。全3platformのproduction JS export、公開Web E2E、両OS compileを確認した。
 - 本人の追加希望で、次はLiquid Glass方向へ更新する（`UI-GLASS-BRIEF.md`）。現在の青い画面は途中の版であり、Glassの完成版ではない。
 - expo-glass-effect57.0.4とexpo-blur57.0.3をSDK互換で導入。依存整合とDoctor21件が成功。UIの具体的な差分設計は作成途中、独立レビューと全画面実装はこれから。

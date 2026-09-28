@@ -5,6 +5,7 @@
 - 状態: 初版完了後、`feat/ui-refresh` でUIを改修中。本人の追加依頼によりLiquid Glass風へ方向を更新した。現行要件は `UI-GLASS-BRIEF.md`、受入は `UI-REFRESH-GOAL.md`。
 - UIの現在地: 第1段階のホーム・共通部品・ナビを実装し、レビュー07の確認ダイアログ/密度/読み上げ/文言を修正。93テスト、型/lint、公開Web E2E15件が成功（撮影専用1件skip）。Glassの依存2件は導入済み、具体的な差分設計と実装は未完了。
 - UIの次の一手: Opus 5.5 highがLiquid Glassの差分設計を完成→Opus 5.5 mediumが設計と07修正をレビュー→highが全画面実装→独立QA/最終レビュー。既存mainは初版のまま。未承認の刷新を完成扱いでmainへ統合しない。
+- UIチェックポイントのCI: `1cfdf62` でChecks/Native builds成功。Glass依存を含むWeb/Android/iOS production JSと両OS compileまで確認した。これはGlass UIの完成・実機での素材表示の確認ではない。
 - リポジトリ: https://github.com/sakuma-dev/payslip-navi
 - 設計: ARCHITECTURE.md。公開インターフェース: CONTRACTS.md。
 - 初版から継続する実機確認: 開発ビルドの実機で架空の日本語明細を使い、写真/カメラ/EXIF、保存と再起動、バックアップ除外、共有と復元を確認する。具体的手順はレビュー05末尾。
