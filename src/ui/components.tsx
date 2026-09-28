@@ -4,6 +4,7 @@ import {
   Animated,
   KeyboardAvoidingView,
   KeyboardTypeOptions,
+  LayoutChangeEvent,
   Modal,
   Platform,
   Pressable,
@@ -543,7 +544,7 @@ export function Field({ label, value, onChangeText, placeholder, error, hint, ke
             accessibilityHint={error ?? hint}
             style={[styles.input, multiline && styles.inputMultiline, align && align !== 'left' && { textAlign: align }, inputStyle]}
           />
-          {suffix ? <Text style={[type.bodyMuted, { paddingRight: space.md }]}>{suffix}</Text> : null}
+          {suffix ? <Text style={[type.bodyMuted, styles.inputSuffix]}>{suffix}</Text> : null}
         </View>
       </View>
       {error ? (
@@ -696,6 +697,14 @@ export function ScreenHeader({ title, onBack, backLabel = '戻る', backIcon = '
 }) {
   const { gutter } = useLayoutMetrics();
   const glass = useGlass();
+  // 左右の欄は、実際の中身（戻るのピル／right）の広い方の幅にそろえる。題を中央に置いたまま、
+  // 固定幅で題の幅を削らない（320px でも「内容を確認」「2026年12月」を省略しない）。
+  const [sides, setSides] = useState({ left: 0, right: 0 });
+  const sideWidth = Math.max(sides.left, sides.right);
+  const measure = (key: 'left' | 'right') => (event: LayoutChangeEvent) => {
+    const width = Math.ceil(event.nativeEvent.layout.width);
+    setSides((current) => (current[key] === width ? current : { ...current, [key]: width }));
+  };
   const pill = glass.opaqueSurfaces
     ? { backgroundColor: colors.surface, borderColor: colors.lineStrong }
     : { backgroundColor: colors.backPill, borderColor: colors.glassEdge };
@@ -703,25 +712,31 @@ export function ScreenHeader({ title, onBack, backLabel = '戻る', backIcon = '
     <View style={[styles.headerFrame, { paddingHorizontal: gutter }]} pointerEvents="box-none">
       <GlassSurface radius={radius.header} style={styles.headerBar}>
         <View style={styles.header}>
-          <View style={styles.headerSide}>
-            {onBack ? (
-              <Pressable
-                onPress={onBack}
-                accessibilityRole="button"
-                accessibilityLabel={backLabel}
-                style={(state) => [styles.backHit, isFocused(state) && focusRingInset]}
-              >
-                {({ pressed }) => (
-                  <View style={[styles.backPill, pill, pressed && { backgroundColor: colors.backPillPressed }]}>
-                    <Icon name={backIcon} size={18} color={colors.primaryDeep} strokeWidth={2} />
-                    <Text style={styles.backText}>{backLabel}</Text>
-                  </View>
-                )}
-              </Pressable>
-            ) : null}
+          <View style={[styles.headerSide, { minWidth: sideWidth }]}>
+            <View style={styles.headerSideContent} onLayout={measure('left')}>
+              {onBack ? (
+                <Pressable
+                  onPress={onBack}
+                  accessibilityRole="button"
+                  accessibilityLabel={backLabel}
+                  style={(state) => [styles.backHit, isFocused(state) && focusRingInset]}
+                >
+                  {({ pressed }) => (
+                    <View style={[styles.backPill, pill, pressed && { backgroundColor: colors.backPillPressed }]}>
+                      <Icon name={backIcon} size={18} color={colors.primaryDeep} strokeWidth={2} />
+                      <Text style={styles.backText}>{backLabel}</Text>
+                    </View>
+                  )}
+                </Pressable>
+              ) : null}
+            </View>
           </View>
-          <Text style={styles.headerTitle} numberOfLines={1} accessibilityRole="header">{title}</Text>
-          <View style={[styles.headerSide, { alignItems: 'flex-end' }]}>{right}</View>
+          {/* 幅が足りない時（文字の拡大など）は省略せず2行まで折り返す */}
+          <Text style={styles.headerTitle} numberOfLines={2} accessibilityRole="header">{title}</Text>
+          <View style={[styles.headerSide, { minWidth: sideWidth, alignItems: 'flex-end' }]}>
+            {/* right を使う時は、ここがクリップされる層の内側なので focusRingInset を使うこと（レビュー09 L2） */}
+            <View style={[styles.headerSideContent, { alignSelf: 'flex-end' }]} onLayout={measure('right')}>{right}</View>
+          </View>
         </View>
       </GlassSurface>
     </View>
@@ -895,6 +910,8 @@ const styles = StyleSheet.create({
   input: {
     ...fontBase,
     flex: 1,
+    // Web の input は固有の最小幅（size 属性ぶん）を持つ。0 にして枠の中で縮め、単位を枠の外へ押し出さない
+    minWidth: 0,
     minHeight: 50,
     paddingHorizontal: space.md,
     fontSize: 16,
@@ -902,6 +919,7 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   inputMultiline: { minHeight: 160, paddingTop: space.md, textAlignVertical: 'top' },
+  inputSuffix: { paddingRight: space.md, flexShrink: 0 },
   fieldError: { flexDirection: 'row', alignItems: 'flex-start', gap: space.xs, marginTop: space.xs },
   checkRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 56, borderRadius: radius.md },
   checkBox: {
@@ -952,7 +970,8 @@ const styles = StyleSheet.create({
   headerFrame: { paddingVertical: space.sm },
   headerBar: { width: '100%', maxWidth: CONTENT_MAX_WIDTH, alignSelf: 'center' },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.xs, minHeight: 50 },
-  headerSide: { width: 104 },
+  headerSide: { flexShrink: 0 },
+  headerSideContent: { alignSelf: 'flex-start' },
   backHit: { minHeight: TOUCH, minWidth: TOUCH, justifyContent: 'center', alignSelf: 'flex-start', borderRadius: radius.pill },
   backPill: {
     flexDirection: 'row',
@@ -965,7 +984,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   backText: { ...fontBase, color: colors.primaryDeep, fontSize: 15, fontWeight: '700' },
-  headerTitle: { ...fontBase, flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '700', color: colors.ink },
+  headerTitle: { ...fontBase, flex: 1, textAlign: 'center', fontSize: 17, lineHeight: 22, fontWeight: '700', color: colors.ink, paddingHorizontal: space.xs },
   empty: { alignItems: 'center', paddingVertical: space.xxl, paddingHorizontal: space.lg },
   emptyMark: {
     width: 72,

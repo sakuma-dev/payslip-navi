@@ -48,14 +48,14 @@ test('a downloaded fictional JSON backup restores the same month, amounts, and c
   await page.getByRole('button', { name: 'すべてのデータを削除' }).click();
   await page.getByRole('textbox', { name: '確認のため削除と入力' }).fill('削除');
   await page.getByRole('button', { name: 'すべて削除する' }).click();
-  await expect(page.getByText('登録済みの0件をすべて削除します。')).toBeVisible();
+  await expect(page.getByText('表示中の明細は0件です。保存先の明細をすべて削除します。元に戻せません。')).toBeVisible();
 
   const chooserPromise = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: 'バックアップから復元する' }).click();
   await (await chooserPromise).setFiles(backupPath);
   await expect(page.getByText('現在のデータを置き換えますか')).toBeVisible();
   await page.getByRole('button', { name: '置き換える' }).click();
-  await expect(page.getByText('登録済みの1件をすべて削除します。')).toBeVisible();
+  await expect(page.getByText('表示中の明細は1件です。保存先の明細をすべて削除します。元に戻せません。')).toBeVisible();
   await page.getByRole('tab', { name: 'ホーム' }).click();
   await expect(page.getByText('2026年9月の手取り')).toBeVisible();
   await expect(page.getByText('250,000円').first()).toBeVisible();
@@ -96,5 +96,5 @@ test('same-month replacement requires consent and cancellation preserves the old
   await expect(page.getByText('260,000円').first()).toBeVisible();
   await page.getByRole('button', { name: '戻る' }).click();
   await page.getByRole('tab', { name: '設定' }).click();
-  await expect(page.getByText('登録済みの1件をすべて削除します。')).toBeVisible();
+  await expect(page.getByText('表示中の明細は1件です。保存先の明細をすべて削除します。元に戻せません。')).toBeVisible();
 });

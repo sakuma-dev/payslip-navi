@@ -27,6 +27,12 @@ const PREVIEW_META = {
 };
 
 const TOTAL_PATHS = ['grossPay', 'totalDeductions', 'netPay'];
+const FIELD_LABEL: Record<string, string> = {
+  month: '支払月',
+  grossPay: '総支給額',
+  totalDeductions: '控除合計',
+  netPay: '差引支給額（手取り）',
+};
 const CATEGORIES: Category[] = ['earning', 'deduction', 'adjustment'];
 const AMOUNT_KEYBOARD = 'numbers-and-punctuation' as const;
 
@@ -168,7 +174,17 @@ export function EditorScreen({ session, records, demo, onSave, onSaved, onCancel
     await persist(null);
   };
 
-  const title = original ? '明細を編集' : '内容を確認';
+  // 算術チェックの一覧で、どの欄・どの項目の指摘かを前に付ける（文言と判定は domain のまま）
+  const issueSubject = (path: string): string | null => {
+    const [head, index, field] = normalizePath(path).split('.');
+    if (head === 'items' && index !== undefined) {
+      const item = draft.items[Number(index)];
+      if (!item) return null;
+      const part = field === 'label' ? '項目名' : field === 'amount' ? '金額' : '項目';
+      return `${CATEGORY_SHORT[item.category]}「${item.label.trim() || '名称未入力'}」の${part}`;
+    }
+    return FIELD_LABEL[head ?? ''] ?? null;
+  };
   // 手順ごとの「要確認」（保存を試した後だけ。入力中は出さない）
   const monthNeedsCheck = !!issueFor('month');
   const totalsNeedCheck = TOTAL_PATHS.some((path) => !!issueFor(path));
@@ -347,9 +363,14 @@ export function EditorScreen({ session, records, demo, onSave, onSaved, onCancel
           </View>
         ) : (
           <View style={{ gap: space.xs }}>
-            {issues.slice(0, 6).map((issue, i) => (
-              <Text key={`${issue.path}-${i}`} style={type.body}>・{issue.message}</Text>
-            ))}
+            {issues.slice(0, 6).map((issue, i) => {
+              const subject = issueSubject(issue.path);
+              return (
+                <Text key={`${issue.path}-${i}`} style={type.body}>
+                  ・{subject ? <Text style={{ fontWeight: '700' }}>{subject}：</Text> : null}{issue.message}
+                </Text>
+              );
+            })}
             {issues.length > 6 ? <Text style={type.caption}>ほか{issues.length - 6}件</Text> : null}
             {totalsIssues.length > 0 ? (
               <>
@@ -414,7 +435,7 @@ export function EditorScreen({ session, records, demo, onSave, onSaved, onCancel
 
       <Dialog
         visible={discardOpen}
-        title={`${title}を中止しますか`}
+        title={original ? '編集を中止しますか' : '入力を中止しますか'}
         onClose={() => setDiscardOpen(false)}
         actions={(
           <>

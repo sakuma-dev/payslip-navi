@@ -108,6 +108,30 @@ export function AddMethodScreen({ onDraft }: { onDraft: (draft: NewDraft) => voi
     },
   ];
 
+  // 並びは 撮影・写真・貼付・手入力（methods の順）
+  const cards = methods.map((method) => (
+    <MethodCard
+      key={method.title === '手入力する' ? `${method.title}-${columns}` : method.title}
+      {...method}
+      horizontal={columns === 1}
+    />
+  ));
+  const pastePanel = pasteOpen ? (
+    <EnterView key="paste-panel" translateY={-6} duration={duration.fast} style={styles.cellFull}>
+      <Card style={styles.pastePanel}>
+        <Field
+          label="明細のテキスト"
+          value={text}
+          onChangeText={setText}
+          multiline
+          placeholder={'例）\n基本給 250,000\n健康保険 12,000\n差引支給額 ...'}
+          hint="貼り付けた文章は候補を作るためだけに使い、保存しません。"
+        />
+        <Button label="候補を作って確認へ" disabled={text.trim() === ''} onPress={submitText} />
+      </Card>
+    </EnterView>
+  ) : null;
+
   return (
     <View>
       <Text style={type.title} accessibilityRole="header">どの方法で追加しますか</Text>
@@ -155,27 +179,11 @@ export function AddMethodScreen({ onDraft }: { onDraft: (draft: NewDraft) => voi
         </Banner>
       ) : null}
 
+      {/* 貼付の入力は、1列では貼付カードの直後、2×2ではグリッドの下（全幅）に開く。どちらも同じ親の中の同じ要素で、
+          列数が変わると「手入力する」カード（key に列数を含む。状態を持たない）だけを付け直すので、入力欄は動かず作り直されない。 */}
       <View style={styles.grid}>
-        {methods.map((method) => (
-          <MethodCard key={method.title} {...method} horizontal={columns === 1} />
-        ))}
+        {columns === 1 ? [...cards.slice(0, 3), pastePanel, cards[3]] : [...cards, pastePanel]}
       </View>
-
-      {pasteOpen ? (
-        <EnterView translateY={-6} duration={duration.fast}>
-          <Card style={styles.pastePanel}>
-            <Field
-              label="明細のテキスト"
-              value={text}
-              onChangeText={setText}
-              multiline
-              placeholder={'例）\n基本給 250,000\n健康保険 12,000\n差引支給額 ...'}
-              hint="貼り付けた文章は候補を作るためだけに使い、保存しません。"
-            />
-            <Button label="候補を作って確認へ" disabled={text.trim() === ''} onPress={submitText} />
-          </Card>
-        </EnterView>
-      ) : null}
 
       <View style={styles.privacy}>
         <Icon name="device" size={16} color={colors.inkMuted} />
@@ -262,6 +270,6 @@ const styles = StyleSheet.create({
   methodIconFlat: { backgroundColor: colors.surface },
   methodTitleRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   methodTitle: { ...type.bodyStrong, fontWeight: '700' },
-  pastePanel: { marginTop: space.md, marginBottom: 0 },
+  pastePanel: { marginBottom: 0 },
   privacy: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm, marginTop: space.xl },
 });

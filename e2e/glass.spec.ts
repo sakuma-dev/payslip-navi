@@ -254,3 +254,160 @@ test('a one-yen deduction does not gain a visible minimum width in the ratio bar
     ).toBeLessThanOrEqual(layoutRoundingTolerance);
   }
 });
+
+test('amount field keeps its number and yen unit inside the input row across narrow and inline layouts', async ({ page }) => {
+  const layoutRoundingTolerance = 1 / 64;
+  for (const viewport of [{ width: 320, height: 700 }, { width: 390, height: 844 }, { width: 430, height: 932 }]) {
+    await page.setViewportSize(viewport);
+    await page.goto('/');
+    await page.getByRole('button', { name: 'サンプル（架空データ）で体験する' }).click();
+    await page.getByRole('button', { name: '明細を追加する' }).click();
+    await page.getByRole('button', { name: '手入力する' }).click();
+    const gross = page.getByRole('textbox', { name: '総支給額' });
+    await gross.click();
+    await gross.pressSequentially('1234567', { delay: 10 });
+    await expect(gross).toHaveValue('1234567');
+    await expect(gross).toBeFocused();
+    const geometry = await gross.evaluate((input) => {
+      const row = input.parentElement;
+      const unit = input.nextElementSibling;
+      if (!row || !unit) throw new Error('Amount input row or yen unit is missing');
+      return {
+        inputRight: input.getBoundingClientRect().right,
+        rowRight: row.getBoundingClientRect().right,
+        unitRight: unit.getBoundingClientRect().right,
+        unitText: unit.textContent?.trim(),
+      };
+    });
+    await test.info().attach(`inline-yen-${viewport.width}px`, {
+      body: JSON.stringify({ viewport, ...geometry }, null, 2),
+      contentType: 'application/json',
+    });
+    expect(geometry.unitText).toBe('円');
+    expect.soft(geometry.inputRight, `${viewport.width}px: amount input stays inside its row`)
+      .toBeLessThanOrEqual(geometry.rowRight + layoutRoundingTolerance);
+    expect.soft(geometry.unitRight, `${viewport.width}px: yen unit stays inside its row`)
+      .toBeLessThanOrEqual(geometry.rowRight + layoutRoundingTolerance);
+  }
+});
+
+
+test('320px stack headings and December payment month remain fully readable', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  const expectHeadingFits = async (heading: Locator, label: string) => {
+    await expect(heading).toBeVisible();
+    const measured = await heading.evaluate((element) => {
+      const style = getComputedStyle(element);
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      return {
+        text: element.textContent?.trim(),
+        textWidth: range.getBoundingClientRect().width,
+        textHeight: range.getBoundingClientRect().height,
+        availableWidth: element.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0),
+        availableHeight: element.clientHeight - (parseFloat(style.paddingTop) || 0) - (parseFloat(style.paddingBottom) || 0),
+        scrollWidth: element.scrollWidth,
+        clientWidth: element.clientWidth,
+        scrollHeight: element.scrollHeight,
+        clientHeight: element.clientHeight,
+      };
+    });
+    await test.info().attach(`stack-heading-${label}`, {
+      body: JSON.stringify(measured, null, 2),
+      contentType: 'application/json',
+    });
+    expect.soft(measured.textWidth, `${label}: full heading glyphs fit`)
+      .toBeLessThanOrEqual(measured.availableWidth + 1);
+    expect.soft(measured.scrollWidth, `${label}: heading has no clipped overflow`)
+      .toBeLessThanOrEqual(measured.clientWidth + 1);
+    expect.soft(measured.textHeight, `${label}: all heading lines fit vertically`)
+      .toBeLessThanOrEqual(measured.availableHeight + 1);
+    expect.soft(measured.scrollHeight, `${label}: no heading line is clamped`)
+      .toBeLessThanOrEqual(measured.clientHeight + 1);
+  };
+
+  await page.goto('/');
+  await page.getByRole('button', { name: '自分の明細を追加する' }).click();
+  await expectHeadingFits(page.getByRole('heading', { name: '明細を追加', exact: true }), 'add');
+  await page.getByRole('button', { name: '手入力する' }).click();
+  await expectHeadingFits(page.getByRole('heading', { name: '内容を確認', exact: true }), 'new-editor');
+
+  const month = page.getByRole('textbox', { name: '支払月（年-月）' });
+  await month.fill('2026-12');
+  const monthWidth = await month.evaluate((element) => {
+    const input = element as HTMLInputElement;
+    const style = getComputedStyle(input);
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Canvas text measurement is unavailable');
+    context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+    const spacing = parseFloat(style.letterSpacing) || 0;
+    return {
+      value: input.value,
+      textWidth: context.measureText(input.value).width + spacing * (input.value.length - 1),
+      availableWidth: input.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0),
+      scrollWidth: input.scrollWidth,
+      clientWidth: input.clientWidth,
+    };
+  });
+  await test.info().attach('december-month-input', { body: JSON.stringify(monthWidth, null, 2), contentType: 'application/json' });
+  expect(monthWidth.value).toBe('2026-12');
+  expect.soft(monthWidth.textWidth, '320px: all seven payment-month characters fit in the input')
+    .toBeLessThanOrEqual(monthWidth.availableWidth + 1);
+  expect.soft(monthWidth.scrollWidth, '320px: payment month has no hidden horizontal overflow')
+    .toBeLessThanOrEqual(monthWidth.clientWidth + 1);
+
+  await page.getByRole('textbox', { name: '総支給額' }).fill('200000');
+  await page.getByRole('textbox', { name: '控除合計' }).fill('0');
+  await page.getByRole('textbox', { name: '差引支給額（手取り）' }).fill('200000');
+  await page.getByRole('checkbox', { name: '明細の数字と見比べて、支払月と金額を確認しました' }).click();
+  await page.getByRole('button', { name: '保存する' }).click();
+  await expect(page.getByText('算術チェック済み')).toBeVisible();
+  await expectHeadingFits(page.getByRole('heading', { name: '2026年12月', exact: true }), 'detail-month');
+  await page.getByRole('button', { name: 'この明細を編集' }).click();
+  await expectHeadingFits(page.getByRole('heading', { name: /^(明細を編集|2026年12月を編集)$/ }), 'edit');
+});
+
+test('Web preview warning remains painted after switching from History to Settings', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'サンプル（架空データ）で体験する' }).click();
+  await page.getByRole('tab', { name: '履歴', exact: true }).click();
+  await page.waitForTimeout(600);
+  await page.getByRole('tab', { name: '設定', exact: true }).click();
+  await page.waitForTimeout(2000);
+
+  const warning = page.getByText('Webプレビュー：保存されず、再読込で消えます');
+  await expect(warning).toBeVisible();
+  const box = await warning.boundingBox();
+  expect(box).not.toBeNull();
+  const screenshot = await page.screenshot();
+  await test.info().attach('settings-web-preview-warning', { body: screenshot, contentType: 'image/png' });
+  const inkPixels = await page.evaluate(async ({ dataUrl, bounds }) => {
+    const image = new Image();
+    image.src = dataUrl;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('PNG pixel inspection is unavailable');
+    context.drawImage(image, 0, 0);
+    const scale = image.width / window.innerWidth;
+    const x = Math.floor(bounds.x * scale);
+    const y = Math.floor(bounds.y * scale);
+    const width = Math.ceil(bounds.width * scale);
+    const height = Math.ceil(bounds.height * scale);
+    const background = context.getImageData(Math.max(0, x - Math.ceil(4 * scale)), y + Math.floor(height / 2), 1, 1).data;
+    const pixels = context.getImageData(x, y, width, height).data;
+    let count = 0;
+    for (let i = 0; i < pixels.length; i += 4) {
+      const difference = Math.abs(pixels[i]! - background[0]!)
+        + Math.abs(pixels[i + 1]! - background[1]!)
+        + Math.abs(pixels[i + 2]! - background[2]!);
+      if (difference > 100 && pixels[i + 3]! > 0) count += 1;
+    }
+    return count;
+  }, { dataUrl: `data:image/png;base64,${screenshot.toString('base64')}`, bounds: box! });
+  expect(inkPixels, 'the warning text must be painted in the actual screenshot').toBeGreaterThan(100);
+});

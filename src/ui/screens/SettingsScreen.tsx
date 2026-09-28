@@ -144,14 +144,16 @@ export function SettingsScreen({ records, demo, busy, onStartDemo, onStopDemo, r
         </Banner>
       ) : null}
 
-      {/* 保存の状態（事実だけ）。書き出しの完了や保存先の有無はわからないので、ここでは扱わない。 */}
+      {/* 保存の状態。件数は画面が最後に読み込んだ一覧のもの（操作後の読み直しに失敗すると古いことがある）なので、
+          「保存中」とは断定せず「表示中」とする。保存の場所は件数から切り離して、仕組みとして説明する。
+          書き出しの完了や保存先の有無はわからないので、ここでは扱わない。 */}
       <Card title="保存の状態">
         <View style={styles.statusRow}>
           <View style={styles.statusIcon}>
             <Icon name={demo ? 'layers' : 'device'} size={22} color={demo ? colors.demo : colors.primaryDeep} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={type.label}>{demo ? '表示中のデモの明細' : isWebPreview ? 'この画面で入力した明細' : '保存中の明細'}</Text>
+            <Text style={type.label}>{demo ? '表示中のデモの明細' : '表示中の明細'}</Text>
             <Text style={styles.statusCount}>{records.length}件</Text>
           </View>
         </View>
@@ -159,8 +161,8 @@ export function SettingsScreen({ records, demo, busy, onStartDemo, onStopDemo, r
           {demo
             ? '架空データです。あなたの保存データとは別に扱っています。'
             : isWebPreview
-              ? '保存されません（Webプレビュー）。再読込で消えます。'
-              : 'この端末の中だけに保存しています。OSのバックアップには含まれません。'}
+              ? 'Webプレビューでは保存されません。再読込で消えます。'
+              : '明細の保存先はこの端末の中だけです。OSのバックアップには含まれません。'}
         </Text>
       </Card>
 
@@ -212,7 +214,8 @@ export function SettingsScreen({ records, demo, busy, onStartDemo, onStopDemo, r
       </Card>
 
       <Card title="データの削除">
-        <Text style={type.body}>登録済みの{records.length}件をすべて削除します。元に戻せません。</Text>
+        {/* 件数は表示中の一覧のもの（保存の状態と同じ前提）。削除の対象は保存先の明細すべて。 */}
+        <Text style={type.body}>表示中の明細は{records.length}件です。保存先の明細をすべて削除します。元に戻せません。</Text>
         <Button
           label="すべてのデータを削除"
           icon="trash"

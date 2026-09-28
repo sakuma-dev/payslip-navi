@@ -13,10 +13,10 @@ const CATEGORIES: Category[] = ['earning', 'deduction', 'adjustment'];
 // 詳細の手取りは 38 を上限に、実際の幅と文字の倍率で段階的に小さくする
 const DETAIL_DISPLAY_MAX = 38;
 
-// 項目が0件の時の説明。区分の合計が0なら項目が無いこと自体が事実なので「項目なし」、
+// 項目が0件の時の説明。区分の合計が0なら「登録された項目はありません」（原本に相殺しあう項目がある可能性は否定しない）、
 // 合計があるのに項目が無いなら、合計だけを保存した明細と書く（「未登録」と断定しない）。
 function emptyItemsText(total: number | null): string {
-  return total === 0 ? '項目なし' : '項目の内訳は登録されていません（合計のみ保存）';
+  return total === 0 ? '登録された項目はありません' : '項目の内訳は登録されていません（合計のみ保存）';
 }
 
 export function DetailScreen({ record, records, demo, onEdit, onDelete }: {
