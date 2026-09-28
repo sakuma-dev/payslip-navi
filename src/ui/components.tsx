@@ -362,12 +362,13 @@ export function SplitBar({ model }: { model: Extract<SplitBarModel, { visible: t
     <View style={[styles.splitBar, model.gap && { gap: 2 }]} accessible accessibilityRole="image" accessibilityLabel={label}>
       {model.segments.map((segment) => {
         const fill = segment.kind === 'net' ? colors.primary : colors.catDeduction;
-        // 同じ色の縁は forced-colors で塗りが消えても区画を残すため。Web の強制色では区画をシステム色で塗り分ける
+        // 縁は付けない（flexBasis:0 の区画に幅を足し、1円の区画にも最小幅ができるため）。
+        // Web の強制色では区画をシステム色で塗り分ける
         return (
           <View
             key={segment.kind}
             {...forcedFill(SPLIT_FORCED[fill] ?? 'ink')}
-            style={{ flexGrow: segment.weight, flexShrink: 1, flexBasis: 0, backgroundColor: fill, borderWidth: 1, borderColor: fill }}
+            style={{ flexGrow: segment.weight, flexShrink: 1, flexBasis: 0, backgroundColor: fill }}
           />
         );
       })}
@@ -419,7 +420,7 @@ export function Segmented<K extends string>({ options, value, onChange, accessib
 // ─── 行・バッジ ───────────────────────────────────────────────
 
 // 左にラベル、右に金額など。右側は縮めず、収まらない時は次の行の右端へ回り込む。
-export function Row({ label, children, sub, onPress, leading, accessibilityLabel, strong }: {
+export function Row({ label, children, sub, onPress, leading, accessibilityLabel, strong, minHeight }: {
   label: string;
   children?: ReactNode;
   sub?: string;
@@ -427,10 +428,12 @@ export function Row({ label, children, sub, onPress, leading, accessibilityLabel
   leading?: ReactNode;
   accessibilityLabel?: string;
   strong?: boolean;
+  // 一覧の行（履歴など）を高くする時だけ指定する
+  minHeight?: number;
 }) {
   const press = usePressScale(0.985);
   const body = (
-    <View style={styles.row}>
+    <View style={[styles.row, minHeight !== undefined && { minHeight }]}>
       {leading ? <View style={styles.rowLeading}>{leading}</View> : null}
       <View style={styles.rowLabel}>
         <Text style={strong || onPress ? type.bodyStrong : type.body}>{label}</Text>
@@ -494,7 +497,7 @@ export function Badge({ label, tone = 'neutral', icon }: { label: string; tone?:
 
 // ─── 入力 ───────────────────────────────────────────────
 
-export function Field({ label, value, onChangeText, placeholder, error, hint, keyboardType, multiline, inputRef, suffix, accessibilityLabel, style, align }: {
+export function Field({ label, value, onChangeText, placeholder, error, hint, keyboardType, multiline, inputRef, suffix, accessibilityLabel, style, align, inline, inputStyle }: {
   label?: string;
   value: string;
   onChangeText: (text: string) => void;
@@ -507,34 +510,41 @@ export function Field({ label, value, onChangeText, placeholder, error, hint, ke
   suffix?: string;
   accessibilityLabel?: string;
   style?: StyleProp<ViewStyle>;
-  align?: 'left' | 'right';
+  align?: 'left' | 'right' | 'center';
+  // ラベル左・入力右の2列。エラーと補足は2列の下に全幅で出す。
+  // 要素の並びは縦積みの時と同じにして、切り替わっても入力中のフォーカスが外れないようにする。
+  inline?: boolean;
+  inputStyle?: StyleProp<TextStyle>;
 }) {
   const [focused, setFocused] = useState(false);
   return (
     <View style={[{ marginBottom: space.md }, style]}>
-      {label ? <Text style={[type.label, { marginBottom: space.xs }]}>{label}</Text> : null}
-      <View
-        style={[
-          styles.inputWrap,
-          focused && styles.inputFocused,
-          error ? styles.inputError : null,
-        ]}
-      >
-        <TextInput
-          ref={inputRef}
-          value={value}
-          onChangeText={onChangeText}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          placeholder={placeholder}
-          placeholderTextColor={colors.inkSubtle}
-          keyboardType={keyboardType}
-          multiline={multiline}
-          accessibilityLabel={accessibilityLabel ?? label}
-          accessibilityHint={error ?? hint}
-          style={[styles.input, multiline && styles.inputMultiline, align === 'right' && { textAlign: 'right' }]}
-        />
-        {suffix ? <Text style={[type.bodyMuted, { paddingRight: space.md }]}>{suffix}</Text> : null}
+      <View style={inline ? styles.fieldInline : null}>
+        {label ? <Text style={inline ? styles.fieldInlineLabel : [type.label, { marginBottom: space.xs }]}>{label}</Text> : null}
+        <View
+          style={[
+            styles.inputWrap,
+            inline && styles.inputInline,
+            focused && styles.inputFocused,
+            error ? styles.inputError : null,
+          ]}
+        >
+          <TextInput
+            ref={inputRef}
+            value={value}
+            onChangeText={onChangeText}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            placeholder={placeholder}
+            placeholderTextColor={colors.inkSubtle}
+            keyboardType={keyboardType}
+            multiline={multiline}
+            accessibilityLabel={accessibilityLabel ?? label}
+            accessibilityHint={error ?? hint}
+            style={[styles.input, multiline && styles.inputMultiline, align && align !== 'left' && { textAlign: align }, inputStyle]}
+          />
+          {suffix ? <Text style={[type.bodyMuted, { paddingRight: space.md }]}>{suffix}</Text> : null}
+        </View>
       </View>
       {error ? (
         <View style={styles.fieldError}>
@@ -877,6 +887,9 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.lineStrong,
   },
+  inputInline: { flex: 1.6, minWidth: 0 },
+  fieldInline: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  fieldInlineLabel: { ...type.bodyStrong, flex: 1, flexShrink: 1 },
   inputFocused: { borderColor: colors.primary, borderWidth: 2 },
   inputError: { borderColor: colors.danger, borderWidth: 2 },
   input: {

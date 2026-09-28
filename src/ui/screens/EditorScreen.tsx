@@ -1,12 +1,14 @@
 import * as Crypto from 'expo-crypto';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, PressableStateCallbackType, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { Category, DraftItem, Issue, ItemCode, Payslip, PayslipDraft } from '../../domain';
 import { buildPayslip } from '../../domain';
 import { a11yState } from '../a11y';
-import { Badge, Banner, Button, Card, Checkbox, Chip, Dialog, Field, SectionTitle } from '../components';
-import { CATEGORY_LABEL, CODE_LABEL, CODES_BY_CATEGORY, currentMonth, errorMessage, monthLabel, shiftMonth } from '../format';
-import { categoryColor, colors, radius, space, type } from '../theme';
+import { Badge, Banner, Button, Card, Checkbox, Chip, Dialog, Field, IconButton, ToggleChevron } from '../components';
+import { CATEGORY_LABEL, CATEGORY_SHORT, CODE_LABEL, CODES_BY_CATEGORY, currentMonth, errorMessage, monthLabel, shiftMonth } from '../format';
+import { Icon } from '../icons';
+import { useLayoutMetrics } from '../layout';
+import { categoryColor, colors, focusRing, fontBase, radius, space, TOUCH, type } from '../theme';
 import type { DraftSource } from './AddMethodScreen';
 
 export interface EditorSession {
@@ -32,6 +34,8 @@ function normalizePath(path: string): string {
   return path.replace(/\[(\d+)\]/g, '.$1');
 }
 
+const isFocused = (state: PressableStateCallbackType) => !!(state as PressableStateCallbackType & { focused?: boolean }).focused;
+
 export function prepareSession(session: EditorSession): EditorSession {
   if (session.source === 'edit') return session;
   // OCR/テキスト由来の仮IDはUUIDへ付け直し、本人確認は必ず未チェックから始める。
@@ -54,6 +58,11 @@ export function EditorScreen({ session, records, demo, onSave, onSaved, onCancel
   onCancel: () => void;
   setBackGuard: (guard: (() => boolean) | null) => void;
 }) {
+  // 幅360以上は合計を「ラベル左・入力右」。項目名と金額の横並びは、金額欄に十分な幅がある時だけ。
+  // どちらも画面の幅だけで決まり、入力中に切り替わらない（要素の並びも同じなのでフォーカスは外れない）。
+  const metrics = useLayoutMetrics();
+  const inline = metrics.sizeClass !== 'compact';
+  const itemsInline = metrics.contentWidth >= 400;
   const [initialJson] = useState(() => JSON.stringify(session.draft));
   // 新規保存のIDは画面を開いた時点で1つだけ作り、再試行でも変えない。
   const [newId] = useState(() => Crypto.randomUUID());
@@ -160,6 +169,10 @@ export function EditorScreen({ session, records, demo, onSave, onSaved, onCancel
   };
 
   const title = original ? '明細を編集' : '内容を確認';
+  // 手順ごとの「要確認」（保存を試した後だけ。入力中は出さない）
+  const monthNeedsCheck = !!issueFor('month');
+  const totalsNeedCheck = TOTAL_PATHS.some((path) => !!issueFor(path));
+  const itemsNeedCheck = attempted && issues.some((i) => normalizePath(i.path).startsWith('items.'));
 
   return (
     <View>
@@ -179,15 +192,16 @@ export function EditorScreen({ session, records, demo, onSave, onSaved, onCancel
       ) : null}
 
       {lines && lines.length > 0 ? (
-        <Card>
+        <Card dense>
           <Pressable
             onPress={() => setShowLines((v) => !v)}
             accessibilityRole="button"
             {...a11yState({ expanded: showLines })}
-            style={styles.linesHead}
+            style={(state) => [styles.linesHead, isFocused(state) && focusRing]}
           >
-            <Text style={[type.heading, { flex: 1 }]}>読み取った行（{lines.length}行）</Text>
+            <Text style={[type.headline, { flex: 1 }]}>読み取った行（{lines.length}行）</Text>
             <Text style={styles.toggle}>{showLines ? '閉じる' : '見る'}</Text>
+            <ToggleChevron open={showLines} size={18} />
           </Pressable>
           <Text style={type.caption}>見比べ用です。この画面を閉じると破棄し、保存しません。</Text>
           {showLines ? (
@@ -198,12 +212,16 @@ export function EditorScreen({ session, records, demo, onSave, onSaved, onCancel
         </Card>
       ) : null}
 
-      <SectionTitle note="明細の「支給日」の月です。「○月分」の表記とは異なる場合があります。">支払月</SectionTitle>
-      <Card>
+      <StepCard
+        step={1}
+        title="支払月"
+        note="明細の「支給日」の月です。「○月分」の表記とは異なる場合があります。"
+        right={monthNeedsCheck ? <Badge label="要確認" tone="danger" /> : undefined}
+      >
         <View style={styles.monthRow}>
-          <Pressable onPress={() => stepMonth(-1)} accessibilityRole="button" accessibilityLabel="前の月" style={styles.monthStep}>
-            <Text style={styles.monthArrow}>‹</Text>
-          </Pressable>
+          <View style={styles.monthStep}>
+            <IconButton icon="chevronLeft" accessibilityLabel="前の月" onPress={() => stepMonth(-1)} />
+          </View>
           <View style={{ flex: 1 }}>
             <Field
               value={draft.month}
@@ -213,95 +231,122 @@ export function EditorScreen({ session, records, demo, onSave, onSaved, onCancel
               accessibilityLabel="支払月（年-月）"
               error={issueFor('month')}
               hint={draft.month.trim() === '' ? '未確定です。明細の支給日から入力してください。' : monthLabel(draft.month.trim())}
+              align="center"
+              inputStyle={styles.monthInput}
               style={{ marginBottom: 0 }}
             />
           </View>
-          <Pressable onPress={() => stepMonth(1)} accessibilityRole="button" accessibilityLabel="次の月" style={styles.monthStep}>
-            <Text style={styles.monthArrow}>›</Text>
-          </Pressable>
-        </View>
-      </Card>
-
-      <SectionTitle note="3つとも必須です。空欄は「未入力」で、0円とは区別します。">合計</SectionTitle>
-      <Card>
-        <Field label="総支給額" value={draft.grossPay} onChangeText={(grossPay) => update({ grossPay })}
-          placeholder="未入力" keyboardType={AMOUNT_KEYBOARD} suffix="円" error={issueFor('grossPay')} inputRef={grossRef} />
-        <Field label="控除合計" value={draft.totalDeductions} onChangeText={(totalDeductions) => update({ totalDeductions })}
-          placeholder="未入力" keyboardType={AMOUNT_KEYBOARD} suffix="円" error={issueFor('totalDeductions')} />
-        <Field label="差引支給額（手取り）" value={draft.netPay} onChangeText={(netPay) => update({ netPay })}
-          placeholder="未入力" keyboardType={AMOUNT_KEYBOARD} suffix="円" error={issueFor('netPay')}
-          hint="振込額ではなく、明細の「差引支給額」を入力します。" />
-      </Card>
-
-      {CATEGORIES.map((category) => {
-        const items = draft.items.filter((i) => i.category === category);
-        return (
-          <View key={category}>
-            <SectionTitle
-              note={category === 'adjustment'
-                ? '現物給与の差し引きや精算など、差引支給額を出すときに明細上で加減されている項目だけ。マイナスは「-」「△」で入力します。'
-                : items.length === 0 ? '内訳未登録（合計だけで保存できます）' : `${items.length}項目。項目の合計が上の合計と一致する必要があります。`}
-            >
-              {CATEGORY_LABEL[category]}
-            </SectionTitle>
-            {items.map((item) => {
-              const index = draft.items.findIndex((i) => i.id === item.id);
-              return (
-                <Card key={item.id} style={[styles.itemCard, { borderLeftColor: categoryColor[category] }]}>
-                  {category !== 'adjustment' ? (
-                    <View style={styles.chips} accessibilityRole="radiogroup" accessibilityLabel="項目の種類">
-                      {CODES_BY_CATEGORY[category].map((code: ItemCode) => (
-                        <Chip
-                          key={code}
-                          label={CODE_LABEL[code]}
-                          selected={item.code === code}
-                          onPress={() => updateItem(item.id, {
-                            code,
-                            label: item.label.trim() === '' && code !== 'other' ? CODE_LABEL[code] : item.label,
-                          })}
-                        />
-                      ))}
-                    </View>
-                  ) : null}
-                  <View style={styles.itemFields}>
-                    <Field label="項目名" value={item.label} onChangeText={(label) => updateItem(item.id, { label })}
-                      placeholder="明細の表記どおり" error={issueFor(`items.${index}.label`)} style={{ flex: 1.3 }} />
-                    <Field label="金額" value={item.amount} onChangeText={(amount) => updateItem(item.id, { amount })}
-                      placeholder="未入力" keyboardType={AMOUNT_KEYBOARD} suffix="円"
-                      error={issueFor(`items.${index}.amount`)} style={{ flex: 1 }}
-                      accessibilityLabel={`${item.label || '項目'}の金額`} />
-                  </View>
-                  <Pressable onPress={() => removeItem(item.id)} accessibilityRole="button"
-                    accessibilityLabel={`${item.label || 'この項目'}を削除`} hitSlop={8} style={styles.removeItem}>
-                    <Text style={styles.removeText}>この項目を削除</Text>
-                  </Pressable>
-                </Card>
-              );
-            })}
-            <Button
-              label={category === 'adjustment' ? '＋ 調整項目を追加' : `＋ ${CATEGORY_LABEL[category]}項目を追加`}
-              variant="ghost"
-              compact
-              onPress={() => addItem(category)}
-              style={{ alignSelf: 'flex-start' }}
-            />
+          <View style={styles.monthStep}>
+            <IconButton icon="chevronRight" accessibilityLabel="次の月" onPress={() => stepMonth(1)} />
           </View>
-        );
-      })}
+        </View>
+      </StepCard>
 
-      <SectionTitle note="数字同士が合っているかの確認です。税額や保険料が正しいかの判定ではありません。">算術チェック</SectionTitle>
-      <Card>
+      <StepCard
+        step={2}
+        title="合計"
+        note="3つとも必須です。空欄は「未入力」で、0円とは区別します。"
+        right={totalsNeedCheck ? <Badge label="要確認" tone="danger" /> : undefined}
+      >
+        <Field label="総支給額" value={draft.grossPay} onChangeText={(grossPay) => update({ grossPay })} inline={inline} align="right"
+          placeholder="未入力" keyboardType={AMOUNT_KEYBOARD} suffix="円" error={issueFor('grossPay')} inputRef={grossRef} />
+        <Field label="控除合計" value={draft.totalDeductions} onChangeText={(totalDeductions) => update({ totalDeductions })} inline={inline} align="right"
+          placeholder="未入力" keyboardType={AMOUNT_KEYBOARD} suffix="円" error={issueFor('totalDeductions')} />
+        <Field label="差引支給額（手取り）" value={draft.netPay} onChangeText={(netPay) => update({ netPay })} inline={inline} align="right"
+          placeholder="未入力" keyboardType={AMOUNT_KEYBOARD} suffix="円" error={issueFor('netPay')}
+          hint="振込額ではなく、明細の「差引支給額」を入力します。" style={{ marginBottom: 0 }} />
+      </StepCard>
+
+      <StepCard
+        step={3}
+        title="内訳（任意）"
+        note="明細にある項目だけを入力します。合計だけでも保存できます。"
+        right={itemsNeedCheck ? <Badge label="要確認" tone="danger" /> : undefined}
+      >
+        {CATEGORIES.map((category, categoryIndex) => {
+          const items = draft.items.filter((i) => i.category === category);
+          return (
+            <View key={category} style={categoryIndex > 0 ? styles.categoryDivider : null}>
+              <View style={styles.categoryHead}>
+                <View style={[styles.categoryDot, { backgroundColor: categoryColor[category] }]} />
+                <Text style={[type.bodyStrong, { flex: 1 }]} accessibilityRole="header">{CATEGORY_LABEL[category]}</Text>
+              </View>
+              <Text style={[type.caption, { marginBottom: space.sm }]}>
+                {category === 'adjustment'
+                  ? '現物給与の差し引きや精算など、差引支給額を出すときに明細上で加減されている項目だけ。マイナスは「-」「△」で入力します。'
+                  : items.length === 0 ? '内訳未登録（合計だけで保存できます）' : `${items.length}項目。項目の合計が上の合計と一致する必要があります。`}
+              </Text>
+              {items.map((item) => {
+                const index = draft.items.findIndex((i) => i.id === item.id);
+                return (
+                  <View key={item.id} style={[styles.itemPanel, { borderLeftColor: categoryColor[category] }]}>
+                    {category !== 'adjustment' ? (
+                      <View style={styles.chips} accessibilityRole="radiogroup" accessibilityLabel="項目の種類">
+                        {CODES_BY_CATEGORY[category].map((code: ItemCode) => (
+                          <Chip
+                            key={code}
+                            label={CODE_LABEL[code]}
+                            selected={item.code === code}
+                            onPress={() => updateItem(item.id, {
+                              code,
+                              label: item.label.trim() === '' && code !== 'other' ? CODE_LABEL[code] : item.label,
+                            })}
+                          />
+                        ))}
+                      </View>
+                    ) : null}
+                    <View style={itemsInline ? styles.itemFields : null}>
+                      <Field label="項目名" value={item.label} onChangeText={(label) => updateItem(item.id, { label })}
+                        placeholder="明細の表記どおり" error={issueFor(`items.${index}.label`)} style={itemsInline ? { flex: 1.3 } : undefined} />
+                      <Field label="金額" value={item.amount} onChangeText={(amount) => updateItem(item.id, { amount })}
+                        placeholder="未入力" keyboardType={AMOUNT_KEYBOARD} suffix="円" align="right"
+                        error={issueFor(`items.${index}.amount`)} style={itemsInline ? { flex: 1 } : undefined}
+                        accessibilityLabel={`${item.label || '項目'}の金額`} />
+                    </View>
+                    <Pressable
+                      onPress={() => removeItem(item.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${item.label || 'この項目'}を削除`}
+                      style={(state) => [styles.removeItem, isFocused(state) && focusRing]}
+                    >
+                      <Icon name="trash" size={16} color={colors.danger} />
+                      <Text style={styles.removeText}>この項目を削除</Text>
+                    </Pressable>
+                  </View>
+                );
+              })}
+              <Button
+                // 算術チェックの「調整項目を追加」と同じ名前にしない（同じ画面に同名の操作を2つ出さない）
+                label={`${CATEGORY_SHORT[category]}の項目を追加`}
+                icon="plus"
+                variant="ghost"
+                compact
+                onPress={() => addItem(category)}
+                style={{ alignSelf: 'flex-start' }}
+              />
+            </View>
+          );
+        })}
+      </StepCard>
+
+      {/* 判定の文言（一致しています／確認が必要です）は見出し行の Badge に1回だけ出す */}
+      <StepCard
+        step={4}
+        title="算術チェック"
+        note="数字同士が合っているかの確認です。税額や保険料が正しいかの判定ではありません。"
+        right={totalsEmpty ? undefined : preview.ok
+          ? <Badge label="一致しています" tone="primary" icon="checkCircle" />
+          : <Badge label="確認が必要です" tone="danger" icon="alert" />}
+      >
         {totalsEmpty ? (
           <Text style={type.bodyMuted}>3つの合計を入力すると確認します。</Text>
         ) : preview.ok ? (
           <View style={{ gap: space.xs }}>
-            <Badge label="一致しています" tone="primary" />
             <Text style={type.bodyMuted}>総支給額 − 控除合計 ＋ 調整 ＝ 差引支給額</Text>
             {previewWarnings.map((w, i) => <Text key={i} style={[type.bodyMuted, { color: colors.warning }]}>・{w.message}</Text>)}
           </View>
         ) : (
           <View style={{ gap: space.xs }}>
-            <Badge label="確認が必要です" tone="danger" />
             {issues.slice(0, 6).map((issue, i) => (
               <Text key={`${issue.path}-${i}`} style={type.body}>・{issue.message}</Text>
             ))}
@@ -322,9 +367,9 @@ export function EditorScreen({ session, records, demo, onSave, onSaved, onCancel
             ) : null}
           </View>
         )}
-      </Card>
+      </StepCard>
 
-      <Card tone="soft">
+      <StepCard step={5} title="確認して保存" tone="soft">
         <Checkbox
           checked={draft.confirmed}
           onChange={(confirmed) => update({ confirmed })}
@@ -335,21 +380,21 @@ export function EditorScreen({ session, records, demo, onSave, onSaved, onCancel
             保存するには確認のチェックが必要です。
           </Text>
         ) : null}
-      </Card>
 
-      {/* 書込後の再読込失敗では保存済みの可能性があるため、未保存と断定しない。同じIDで再試行しても重複しない。 */}
-      {saveError ? <Banner tone="danger" title="保存でエラーが発生しました">{saveError}</Banner> : null}
+        {/* 書込後の再読込失敗では保存済みの可能性があるため、未保存と断定しない。同じIDで再試行しても重複しない。 */}
+        {saveError ? <View style={{ marginTop: space.md }}><Banner tone="danger" title="保存でエラーが発生しました">{saveError}</Banner></View> : null}
 
-      <View style={{ gap: space.sm, marginTop: space.sm }}>
-        <Button
-          label={saving ? '保存中…' : saveError && attempted ? 'もう一度保存する' : '保存する'}
-          busy={saving}
-          disabled={!draft.confirmed}
-          hint={!draft.confirmed ? '確認のチェックを入れると保存できます' : undefined}
-          onPress={save}
-        />
-        <Button label="やめる" variant="ghost" disabled={saving} onPress={() => (dirty ? setDiscardOpen(true) : onCancel())} />
-      </View>
+        <View style={{ gap: space.sm, marginTop: space.md }}>
+          <Button
+            label={saving ? '保存中…' : saveError && attempted ? 'もう一度保存する' : '保存する'}
+            busy={saving}
+            disabled={!draft.confirmed}
+            hint={!draft.confirmed ? '確認のチェックを入れると保存できます' : undefined}
+            onPress={save}
+          />
+          <Button label="やめる" variant="ghost" disabled={saving} onPress={() => (dirty ? setDiscardOpen(true) : onCancel())} />
+        </View>
+      </StepCard>
 
       <Dialog
         visible={duplicate !== null}
@@ -384,18 +429,79 @@ export function EditorScreen({ session, records, demo, onSave, onSaved, onCancel
   );
 }
 
+// 番号付きの手順カード。番号は読み上げず、見出しだけを header として読む。
+function StepCard({ step, title, note, right, tone, children }: {
+  step: number;
+  title: string;
+  note?: string;
+  right?: ReactNode;
+  tone?: 'soft';
+  children: ReactNode;
+}) {
+  return (
+    <Card tone={tone}>
+      <View style={styles.stepHead}>
+        <View
+          style={[styles.stepNumber, tone === 'soft' && { backgroundColor: colors.surface }]}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          aria-hidden
+        >
+          <Text style={styles.stepNumberText}>{step}</Text>
+        </View>
+        <Text style={[type.headline, styles.stepTitle]} accessibilityRole="header">{title}</Text>
+        {right ? <View style={styles.stepRight}>{right}</View> : null}
+      </View>
+      {note ? <Text style={[type.caption, styles.stepNote]}>{note}</Text> : null}
+      {children}
+    </Card>
+  );
+}
+
 const styles = StyleSheet.create({
-  linesHead: { flexDirection: 'row', alignItems: 'center', minHeight: 40 },
-  toggle: { color: colors.primary, fontWeight: '600' },
+  stepHead: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: space.sm, rowGap: space.xs },
+  stepNumber: {
+    width: 24,
+    height: 24,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepNumberText: { ...fontBase, color: colors.primaryDeep, fontSize: 13, lineHeight: 16, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  stepTitle: { flexGrow: 1, flexShrink: 1 },
+  stepRight: { marginLeft: 'auto' },
+  stepNote: { marginTop: space.xs, marginBottom: space.md },
+  linesHead: { flexDirection: 'row', alignItems: 'center', gap: space.xs, minHeight: TOUCH, borderRadius: radius.md },
+  toggle: { ...fontBase, color: colors.primary, fontSize: 14, fontWeight: '600' },
   lines: { marginTop: space.sm, backgroundColor: colors.surfaceMuted, borderRadius: radius.sm, padding: space.md, gap: 2 },
-  lineText: { fontSize: 13, color: colors.ink, fontVariant: ['tabular-nums'] },
-  monthRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
-  monthStep: { width: 44, height: 46, alignItems: 'center', justifyContent: 'center' },
-  monthArrow: { fontSize: 28, color: colors.primary },
-  itemCard: { borderLeftWidth: 4, paddingBottom: space.sm },
+  lineText: { ...fontBase, fontSize: 13, color: colors.ink, fontVariant: ['tabular-nums'] },
+  monthRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.xs },
+  // 入力欄（高さ53）と中心をそろえる
+  monthStep: { paddingTop: 4 },
+  monthInput: { fontSize: 20, fontWeight: '700' },
+  categoryDivider: { marginTop: space.lg, paddingTop: space.lg, borderTopWidth: 1, borderTopColor: colors.line },
+  categoryHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginBottom: space.xxs },
+  categoryDot: { width: 8, height: 8, borderRadius: 4 },
+  itemPanel: {
+    backgroundColor: colors.surfaceSunken,
+    borderRadius: radius.md,
+    borderLeftWidth: 4,
+    padding: space.md,
+    paddingBottom: space.xs,
+    marginBottom: space.sm,
+  },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, marginBottom: space.md },
   itemFields: { flexDirection: 'row', gap: space.sm },
-  removeItem: { alignSelf: 'flex-end', paddingVertical: space.xs, minHeight: 32, justifyContent: 'center' },
-  removeText: { color: colors.danger, fontSize: 13, fontWeight: '600' },
+  removeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    gap: space.xs,
+    minHeight: TOUCH,
+    paddingHorizontal: space.sm,
+    borderRadius: radius.pill,
+  },
+  removeText: { ...fontBase, color: colors.danger, fontSize: 13, fontWeight: '600' },
   fixActions: { flexDirection: 'row', gap: space.sm, flexWrap: 'wrap', marginTop: space.xs },
 });

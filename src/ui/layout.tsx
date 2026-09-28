@@ -3,13 +3,9 @@ import { Animated, StyleProp, useWindowDimensions, View, ViewStyle } from 'react
 import { EnterOptions, useEnterAnimation } from './motion';
 import { CONTENT_MAX_WIDTH, layoutMetrics, LayoutMetrics, tileSpacing } from './visual';
 
+// 浮遊ナビの高さの見込み（実測までの値）と画面下端との間隔。本文末尾の余白は AppRoot が実測の高さから決める。
 export const NAV_HEIGHT = 64;
 export const NAV_GAP = 12;
-
-// タブ画面の末尾に確保する余白（浮遊ナビ＋safe area＋呼吸の余白）
-export function navReserve(insetBottom: number): number {
-  return NAV_HEIGHT + NAV_GAP + insetBottom + 24;
-}
 
 export function useLayoutMetrics(): LayoutMetrics & { width: number; fontScale: number; tile: { gap: number; padding: number } } {
   const { width, fontScale } = useWindowDimensions();

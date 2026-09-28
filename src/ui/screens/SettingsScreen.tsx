@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import type { Backup, Payslip } from '../../domain';
 import { parseBackup, serializeBackup } from '../../domain';
 import { isWebPreview, pickBackupText, shareBackup } from '../../services';
-import { Banner, Button, Card, Dialog, Divider, Field, SectionTitle } from '../components';
+import { Badge, Banner, Button, Card, Dialog, Divider, Field } from '../components';
 import { errorMessage } from '../format';
-import { colors, space, type } from '../theme';
+import { Icon } from '../icons';
+import { colors, fontBase, radius, space, type } from '../theme';
 
 type Notice = { tone: 'success' | 'danger' | 'warning' | 'info'; title: string; body: string; reload?: boolean } | null;
 
@@ -143,23 +144,45 @@ export function SettingsScreen({ records, demo, busy, onStartDemo, onStopDemo, r
         </Banner>
       ) : null}
 
-      <SectionTitle>体験モード</SectionTitle>
-      <Card tone={demo ? 'demo' : 'default'}>
+      {/* 保存の状態（事実だけ）。書き出しの完了や保存先の有無はわからないので、ここでは扱わない。 */}
+      <Card title="保存の状態">
+        <View style={styles.statusRow}>
+          <View style={styles.statusIcon}>
+            <Icon name={demo ? 'layers' : 'device'} size={22} color={demo ? colors.demo : colors.primaryDeep} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={type.label}>{demo ? '表示中のデモの明細' : isWebPreview ? 'この画面で入力した明細' : '保存中の明細'}</Text>
+            <Text style={styles.statusCount}>{records.length}件</Text>
+          </View>
+        </View>
+        <Text style={[type.bodyMuted, { marginTop: space.sm }, !demo && isWebPreview && { color: colors.warning, fontWeight: '600' }]}>
+          {demo
+            ? '架空データです。あなたの保存データとは別に扱っています。'
+            : isWebPreview
+              ? '保存されません（Webプレビュー）。再読込で消えます。'
+              : 'この端末の中だけに保存しています。OSのバックアップには含まれません。'}
+        </Text>
+      </Card>
+
+      <Card tone={demo ? 'demo' : 'default'} title="体験モード">
         {demo ? (
           <>
-            <Text style={type.body}>いまは架空データのデモを表示しています。デモでの追加や削除は、終了すると消えます。あなたのデータには触れていません。</Text>
+            <View style={styles.demoLine}>
+              <Icon name="layers" size={20} color={colors.demo} />
+              <Text style={[type.body, { flex: 1 }]}>いまは架空データのデモを表示しています。デモでの追加や削除は、終了すると消えます。あなたのデータには触れていません。</Text>
+            </View>
             <Button label="デモを終了して自分のデータへ戻る" disabled={busy} onPress={onStopDemo} style={{ marginTop: space.md }} />
           </>
         ) : (
           <>
             <Text style={type.body}>架空の明細で、比較や推移の見え方を試せます。デモ中はあなたのデータを読み書きしません。</Text>
-            <Button label="サンプルで体験する" variant="secondary" disabled={busy} onPress={onStartDemo} style={{ marginTop: space.md }} />
+            <Button label="サンプルで体験する" icon="layers" variant="secondary" disabled={busy} onPress={onStartDemo} style={{ marginTop: space.md }} />
           </>
         )}
       </Card>
 
-      <SectionTitle note={demo ? 'デモ中は利用できません' : undefined}>バックアップと復元</SectionTitle>
-      <Card>
+      <Card title="バックアップと復元">
+        {demo ? <View style={{ marginBottom: space.sm }}><Badge label="デモ中は利用できません" tone="demo" /></View> : null}
         <Text style={type.body}>
           明細はこの端末の中だけに保存され、OSのバックアップにも含まれません。機種変更やアプリ削除の前に、JSONファイルへ書き出してください。
         </Text>
@@ -169,6 +192,7 @@ export function SettingsScreen({ records, demo, busy, onStartDemo, onStopDemo, r
         <View style={{ gap: space.sm, marginTop: space.md }}>
           <Button
             label="バックアップを書き出す"
+            icon="upload"
             variant="secondary"
             disabled={demo || records.length === 0}
             onPress={() => setExportOpen(true)}
@@ -176,6 +200,8 @@ export function SettingsScreen({ records, demo, busy, onStartDemo, onStopDemo, r
           />
           <Button
             label={reading ? 'ファイルを確認中…' : 'バックアップから復元する'}
+            accessibilityLabel="バックアップから復元する"
+            icon="download"
             variant="secondary"
             disabled={demo}
             busy={reading}
@@ -185,11 +211,11 @@ export function SettingsScreen({ records, demo, busy, onStartDemo, onStopDemo, r
         </View>
       </Card>
 
-      <SectionTitle>データの削除</SectionTitle>
-      <Card>
+      <Card title="データの削除">
         <Text style={type.body}>登録済みの{records.length}件をすべて削除します。元に戻せません。</Text>
         <Button
           label="すべてのデータを削除"
+          icon="trash"
           variant="danger"
           disabled={demo || records.length === 0}
           onPress={() => setWipeOpen(true)}
@@ -197,19 +223,18 @@ export function SettingsScreen({ records, demo, busy, onStartDemo, onStopDemo, r
         />
       </Card>
 
-      <SectionTitle>このアプリについて</SectionTitle>
-      <Card>
-        <Text style={type.body}>・写真の読み取りは端末内で行い、画像と読み取った文章は保存しません。</Text>
-        <Divider />
-        <Text style={type.body}>・保存するのは、あなたが確認した支払月・項目・金額だけです。氏名や社員番号は保存しません。</Text>
-        <Divider />
-        <Text style={type.body}>・「算術チェック」は数字同士が合っているかの確認で、税額や保険料が正しいかの判定ではありません。</Text>
-        <Divider />
-        <Text style={type.body}>・アプリ独自の暗号化や画面ロックは現在ありません。端末のロックをご利用ください。</Text>
+      <Card title="このアプリについて">
+        <AboutLine text="写真の読み取りは端末内で行い、画像と読み取った文章は保存しません。" />
+        <Divider inset={28} />
+        <AboutLine text="保存するのは、あなたが確認した支払月・項目・金額だけです。氏名や社員番号は保存しません。" />
+        <Divider inset={28} />
+        <AboutLine text="「算術チェック」は数字同士が合っているかの確認で、税額や保険料が正しいかの判定ではありません。" />
+        <Divider inset={28} />
+        <AboutLine text="アプリ独自の暗号化や画面ロックは現在ありません。端末のロックをご利用ください。" />
         {isWebPreview ? (
           <>
-            <Divider />
-            <Text style={[type.body, { color: colors.warning }]}>・Webプレビューでは保存されず、再読込で消えます。</Text>
+            <Divider inset={28} />
+            <AboutLine text="Webプレビューでは保存されず、再読込で消えます。" warning />
           </>
         ) : null}
       </Card>
@@ -279,3 +304,30 @@ export function SettingsScreen({ records, demo, busy, onStartDemo, onStopDemo, r
     </View>
   );
 }
+
+function AboutLine({ text, warning }: { text: string; warning?: boolean }) {
+  const color = warning ? colors.warning : colors.inkMuted;
+  return (
+    <View style={styles.aboutLine}>
+      <View style={{ paddingTop: 3 }}>
+        <Icon name={warning ? 'alert' : 'check'} size={16} color={color} strokeWidth={2} />
+      </View>
+      <Text style={[type.body, { flex: 1 }, warning && { color: colors.warning }]}>{text}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  statusIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceSunken,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusCount: { ...fontBase, color: colors.ink, fontSize: 22, lineHeight: 28, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  demoLine: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
+  aboutLine: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md, paddingVertical: space.sm },
+});

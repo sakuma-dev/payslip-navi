@@ -151,7 +151,7 @@
 - **Card / 内訳シート:** surfaceStyle を使う。半径はカード24、シート28（raised）。soft と demo は不透明のまま。
 - **Button:** `inverse` を廃止して `glass` を追加する。primary には buttonPrimary の影。
 - **Segmented:** 溝は controlTrack、カプセルは縁 primary 1.5px。
-- **SplitBar と凡例の見本:** 同じ色の border を持たせ、forced-colors でも区画が残るようにする。
+- **SplitBar と凡例の見本:** 強制色では区画をシステム色で塗り分け、区画の配置幅を消費するborderや最小幅は加えない（G-C1）。凡例の見本の縁は残す。
 - **Dialog:** `#FFFFFF`、半径28、scrim `rgba(22,33,58,.40)`。ぼかさない。H1 の処理は変えない。
 - **DeltaChip と IconButton:** `onStage` を削除する。
 
@@ -176,6 +176,7 @@
 - 押下領域は実寸44以上。320px、fontScale 1.6、`-1,000,000,000円` の条件は §14 のとおり。
 - 390×844・Web・デモ帯ありで「plotの上端＋72 ≦ tablistの上端」を維持する。
 - ヘッダーはツリーの先頭、ナビは末尾に置く。装飾は `aria-hidden` かつ `pointerEvents="none"`。
+  - ヘッダーをデモ帯・Web帯より先の DOM 順にするのは、スタック画面で「戻る」を最初の Tab にするため（見た目では帯が上にあり、Tab は戻る→帯の終了の順になる。レビュー09 L1 として受け入れる）。
 
 ## 9. 段階
 
