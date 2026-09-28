@@ -12,9 +12,12 @@ import {
 } from 'react-native';
 import { draftFromPayslip } from '../domain';
 import { isWebPreview } from '../services';
-import { Button, Dialog, ScreenHeader } from './components';
+import { Button, Dialog, LargeTitle, ScreenHeader } from './components';
 import { monthLabel } from './format';
+import { Icon } from './icons';
 import { useInsets } from './insets';
+import { EnterView, navReserve, Screen, useLayoutMetrics } from './layout';
+import { duration, MotionProvider } from './motion';
 import { AddMethodScreen, NewDraft } from './screens/AddMethodScreen';
 import { DetailScreen } from './screens/DetailScreen';
 import { EditorScreen, EditorSession, prepareSession } from './screens/EditorScreen';
@@ -23,7 +26,8 @@ import { HistoryScreen } from './screens/HistoryScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { FailureScreen, LoadingScreen, OnboardingScreen } from './screens/OnboardingScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
-import { colors, space } from './theme';
+import { TabBar, TabItem } from './TabBar';
+import { colors, focusRingOnDark, fontBase, radius, space, TOUCH } from './theme';
 import { useAppData } from './useAppData';
 
 type Tab = 'home' | 'history' | 'guide' | 'settings';
@@ -31,12 +35,14 @@ type Route =
   | { name: 'add' }
   | { name: 'editor'; session: EditorSession; key: number }
   | { name: 'detail'; id: string };
+// 画面の入れ替わり方（入場の動きの向きだけに使う）
+type Transition = 'tab' | 'push' | 'pop';
 
-const TABS: { key: Tab; label: string }[] = [
-  { key: 'home', label: 'ホーム' },
-  { key: 'history', label: '履歴' },
-  { key: 'guide', label: '項目ガイド' },
-  { key: 'settings', label: '設定' },
+const TABS: TabItem<Tab>[] = [
+  { key: 'home', label: 'ホーム', icon: 'home' },
+  { key: 'history', label: '履歴', icon: 'history' },
+  { key: 'guide', label: '項目ガイド', icon: 'book' },
+  { key: 'settings', label: '設定', icon: 'sliders' },
 ];
 
 const TAB_TITLE: Record<Tab, string> = {
@@ -48,11 +54,27 @@ const TAB_TITLE: Record<Tab, string> = {
 
 let editorKey = 0;
 
+function routeKey(route: Route): string {
+  if (route.name === 'editor') return `editor-${route.key}`;
+  if (route.name === 'detail') return `detail-${route.id}`;
+  return route.name;
+}
+
 export function AppRoot() {
+  return (
+    <MotionProvider>
+      <AppShell />
+    </MotionProvider>
+  );
+}
+
+function AppShell() {
   const data = useAppData();
   const insets = useInsets();
-  const [tab, setTab] = useState<Tab>('home');
+  const metrics = useLayoutMetrics();
+  const [tab, setTabState] = useState<Tab>('home');
   const [stack, setStack] = useState<Route[]>([]);
+  const [transition, setTransition] = useState<Transition>('tab');
   const [welcomed, setWelcomed] = useState(false);
   const [exitDemoOpen, setExitDemoOpen] = useState(false);
   const backGuard = useRef<(() => boolean) | null>(null);
@@ -61,8 +83,18 @@ export function AppRoot() {
   const demo = data.mode === 'demo';
   const top = stack[stack.length - 1] ?? null;
 
-  const push = useCallback((route: Route) => setStack((s) => [...s, route]), []);
-  const pop = useCallback(() => setStack((s) => s.slice(0, -1)), []);
+  const setTab = useCallback((next: Tab) => {
+    setTransition('tab');
+    setTabState(next);
+  }, []);
+  const push = useCallback((route: Route) => {
+    setTransition('push');
+    setStack((s) => [...s, route]);
+  }, []);
+  const pop = useCallback(() => {
+    setTransition('pop');
+    setStack((s) => s.slice(0, -1));
+  }, []);
   const setBackGuard = useCallback((guard: (() => boolean) | null) => {
     backGuard.current = guard;
   }, []);
@@ -80,16 +112,12 @@ export function AppRoot() {
       return true;
     }
     return false;
-  }, [data.busy, pop, stack.length, tab]);
+  }, [data.busy, pop, setTab, stack.length, tab]);
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', goBack);
     return () => sub.remove();
   }, [goBack]);
-
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ y: 0, animated: false });
-  }, [tab, stack.length]);
 
   const openEditor = (session: EditorSession) => {
     editorKey += 1;
@@ -99,6 +127,7 @@ export function AppRoot() {
   const onDraft = (draft: NewDraft) => {
     // 追加方式の画面を確認・編集画面で置き換える。
     editorKey += 1;
+    setTransition('push');
     setStack((s) => [
       ...s.slice(0, -1),
       {
@@ -139,6 +168,9 @@ export function AppRoot() {
 
   let header: React.ReactNode = null;
   let body: React.ReactNode;
+  // ホームは青いステージを画面幅いっぱいに描くため、ガターを自分で持つ。
+  let fullBleed = false;
+  let bodyKey = 'static';
 
   if (data.phase.status === 'loading') {
     body = <LoadingScreen />;
@@ -162,6 +194,7 @@ export function AppRoot() {
         }}
       />
     );
+    bodyKey = 'onboarding';
   } else if (top?.name === 'add') {
     header = <ScreenHeader title="明細を追加" onBack={goBack} />;
     body = <AddMethodScreen onDraft={onDraft} />;
@@ -172,6 +205,7 @@ export function AppRoot() {
         title={original ? `${monthLabel(original.month)}を編集` : '内容を確認'}
         onBack={goBack}
         backLabel="閉じる"
+        backIcon="close"
       />
     );
     body = (
@@ -189,6 +223,7 @@ export function AppRoot() {
         onSaved={(id) => {
           backGuard.current = null;
           // 保存成功を確認してから詳細へ。追加方式の画面は残さない。
+          setTransition('push');
           setStack((s) => [...s.slice(0, -1).filter((r) => r.name !== 'add' && !(r.name === 'detail' && r.id === id)), { name: 'detail', id }]);
         }}
       />
@@ -211,38 +246,64 @@ export function AppRoot() {
       <Text style={styles.missing}>この明細は見つかりませんでした。削除された可能性があります。</Text>
     );
   } else {
-    header = <ScreenHeader title={TAB_TITLE[tab]} />;
     const openDetail = (id: string) => push({ name: 'detail', id });
     const add = () => push({ name: 'add' });
-    body =
-      tab === 'home' ? <HomeScreen records={data.records} onAdd={add} onOpen={openDetail} demo={demo} />
-        : tab === 'history' ? <HistoryScreen records={data.records} onOpen={openDetail} onAdd={add} />
-          : tab === 'guide' ? <GuideScreen />
-            : (
-              <SettingsScreen
-                records={data.records}
-                demo={demo}
-                busy={data.busy}
-                onStartDemo={startDemo}
-                onStopDemo={requestStopDemo}
-                replaceAll={data.replaceAll}
-                refresh={data.refresh}
-              />
-            );
+    if (tab === 'home') {
+      fullBleed = true;
+      body = <HomeScreen records={data.records} onAdd={add} onOpen={openDetail} demo={demo} />;
+    } else {
+      body = (
+        <>
+          <LargeTitle title={TAB_TITLE[tab]} />
+          {tab === 'history' ? <HistoryScreen records={data.records} onOpen={openDetail} onAdd={add} />
+            : tab === 'guide' ? <GuideScreen />
+              : (
+                <SettingsScreen
+                  records={data.records}
+                  demo={demo}
+                  busy={data.busy}
+                  onStartDemo={startDemo}
+                  onStopDemo={requestStopDemo}
+                  replaceAll={data.replaceAll}
+                  refresh={data.refresh}
+                />
+              )}
+        </>
+      );
+    }
   }
+  if (top) bodyKey = routeKey(top);
+  else if (data.phase.status === 'ready' && !showOnboarding) bodyKey = `tab-${tab}`;
+
+  // 画面が入れ替わったら先頭から表示する（初回案内→ホームなど、タブや stack の長さが変わらない切替も含む）。
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [bodyKey, stack.length]);
 
   const showTabs = data.phase.status === 'ready' && !showOnboarding && stack.length === 0;
+  const hasBars = isWebPreview || demo;
+  // 帯が無く、ホームのステージが画面幅いっぱいの時だけ、safe area上端を青くして白いステータスバーにする。
+  const blueTop = showTabs && tab === 'home' && !hasBars && metrics.sizeClass !== 'wide';
+
+  // 入場の動き: タブは下から、スタックは進む/戻るの向きから。ホームのステージは動かさない（内側で段階表示）。
+  const enter = fullBleed
+    ? { opacity: 1 }
+    : transition === 'push' ? { translateX: 16, duration: duration.slow }
+      : transition === 'pop' ? { translateX: -16, duration: duration.slow }
+        : { translateY: 8, duration: duration.base };
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      <StatusBar style="dark" />
+    <View style={[styles.root, { paddingTop: insets.top, backgroundColor: blueTop ? colors.primaryDeep : colors.canvas }]}>
+      <StatusBar style={blueTop ? 'light' : 'dark'} />
       {isWebPreview ? (
         <View style={styles.webBar} accessibilityRole="alert">
+          <Icon name="alert" size={16} color={colors.warning} />
           <Text style={styles.webText}>Webプレビュー：保存されず、再読込で消えます</Text>
         </View>
       ) : null}
       {demo ? (
         <View style={styles.demoBar}>
+          <Icon name="layers" size={16} color={colors.onPrimary} />
           <Text style={styles.demoText}>デモ（架空データ）表示中</Text>
           <Pressable
             onPress={requestStopDemo}
@@ -250,10 +311,11 @@ export function AppRoot() {
             accessibilityRole="button"
             accessibilityLabel="デモを終了"
             accessibilityState={{ disabled: data.busy }}
-            hitSlop={10}
-            style={data.busy ? { opacity: 0.5 } : undefined}
+            style={(state) => [styles.demoExitHit, data.busy && { opacity: 0.5 }, (state as { focused?: boolean }).focused && focusRingOnDark]}
           >
-            <Text style={styles.demoExit}>終了</Text>
+            <View style={styles.demoExitPill}>
+              <Text style={styles.demoExit}>終了</Text>
+            </View>
           </Pressable>
         </View>
       ) : null}
@@ -271,64 +333,62 @@ export function AppRoot() {
         デモで入力中の内容は保存されていません。終了すると破棄され、あなたのデータの画面へ戻ります。
       </Dialog>
       {header}
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           ref={scrollRef}
-          contentContainerStyle={[styles.content, !showTabs && { paddingBottom: insets.bottom + space.xxl }]}
+          style={styles.scroll}
+          contentContainerStyle={[
+            styles.content,
+            { paddingBottom: showTabs ? navReserve(insets.bottom) : insets.bottom + space.xxl + space.sm },
+          ]}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.inner}>{body}</View>
+          {blueTop ? <View style={styles.overscroll} /> : null}
+          <EnterView key={bodyKey} {...enter}>
+            {fullBleed ? body : <Screen>{body}</Screen>}
+          </EnterView>
         </ScrollView>
       </KeyboardAvoidingView>
-      {showTabs ? (
-        <View style={[styles.tabBar, { paddingBottom: insets.bottom + space.xs }]} accessibilityRole="tablist">
-          {TABS.map((t) => {
-            const selected = t.key === tab;
-            return (
-              <Pressable
-                key={t.key}
-                onPress={() => setTab(t.key)}
-                disabled={data.busy}
-                accessibilityRole="tab"
-                accessibilityState={{ selected, disabled: data.busy }}
-                style={styles.tab}
-              >
-                <View style={[styles.tabIndicator, selected && { backgroundColor: colors.primary }]} />
-                <Text style={[styles.tabText, selected && styles.tabTextSelected]}>{t.label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      ) : null}
+      {showTabs ? <TabBar tabs={TABS} selected={tab} onSelect={setTab} disabled={data.busy} /> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background },
-  content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, flexGrow: 1 },
-  inner: { width: '100%', maxWidth: 640, alignSelf: 'center' },
-  webBar: { backgroundColor: colors.warningSoft, paddingVertical: space.xs, paddingHorizontal: space.lg },
-  webText: { color: colors.warning, fontSize: 13, fontWeight: '700', textAlign: 'center' },
+  root: { flex: 1 },
+  fill: { flex: 1 },
+  scroll: { backgroundColor: colors.canvas },
+  content: { flexGrow: 1 },
+  // iOSで上に引っ張った時に、ステージの上が背景色で抜けないようにする
+  overscroll: { position: 'absolute', left: 0, right: 0, top: -600, height: 600, backgroundColor: colors.primaryDeep },
+  webBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.xs,
+    backgroundColor: colors.warningSoft,
+    minHeight: 36,
+    paddingHorizontal: space.lg,
+  },
+  webText: { ...fontBase, color: colors.warning, fontSize: 13, fontWeight: '700', textAlign: 'center', flexShrink: 1 },
   demoBar: {
     backgroundColor: colors.demo,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: space.sm,
-    paddingHorizontal: space.lg,
+    gap: space.sm,
+    minHeight: TOUCH,
+    paddingLeft: space.lg,
+    paddingRight: space.sm,
   },
-  demoText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
-  demoExit: { color: '#FFFFFF', fontSize: 14, fontWeight: '700', textDecorationLine: 'underline' },
-  tabBar: {
-    flexDirection: 'row',
+  demoText: { ...fontBase, color: colors.onPrimary, fontSize: 14, fontWeight: '700', flex: 1 },
+  demoExitHit: { minHeight: TOUCH, minWidth: TOUCH + 12, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill },
+  demoExitPill: {
+    minHeight: 32,
+    paddingHorizontal: 14,
+    justifyContent: 'center',
+    borderRadius: radius.pill,
     backgroundColor: colors.surface,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.line,
   },
-  tab: { flex: 1, alignItems: 'center', paddingTop: 0, minHeight: 56, justifyContent: 'flex-start' },
-  tabIndicator: { height: 3, width: 32, borderRadius: 2, backgroundColor: 'transparent', marginBottom: 10 },
-  tabText: { fontSize: 13, color: colors.inkMuted, fontWeight: '600' },
-  tabTextSelected: { color: colors.primary, fontWeight: '800' },
-  missing: { color: colors.inkMuted, fontSize: 15, paddingVertical: space.xl, textAlign: 'center' },
+  demoExit: { ...fontBase, color: colors.demo, fontSize: 14, fontWeight: '800' },
+  missing: { ...fontBase, color: colors.inkMuted, fontSize: 15, paddingVertical: space.xl, textAlign: 'center' },
 });

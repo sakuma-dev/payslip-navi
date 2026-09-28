@@ -3,13 +3,20 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Payslip } from '../domain';
 import { buildTrend, formatYen } from '../domain';
 import { layoutBars } from './chartScale';
-import { Divider, Row } from './components';
+import { Divider, IconButton, Row, ToggleChevron } from './components';
 import { monthLabel, yenSpeech } from './format';
-import { colors, radius, space, type } from './theme';
+import { EnterView } from './layout';
+import { duration } from './motion';
+import { colors, focusRing, fontBase, radius, space, TOUCH, type } from './theme';
 
-const BAR_AREA = 132;
+const BAR_AREA = 144;
 
-export function TrendChart({ records, initialYear }: { records: Payslip[]; initialYear: number }) {
+export function TrendChart({ records, initialYear, highlightMonth }: {
+  records: Payslip[];
+  initialYear: number;
+  // 濃い色で示す月（ホームでは最新の明細の月）
+  highlightMonth?: string;
+}) {
   const years = useMemo(() => {
     const set = new Set(records.map((r) => Number(r.month.slice(0, 4))).filter((y) => Number.isFinite(y)));
     set.add(initialYear);
@@ -29,67 +36,81 @@ export function TrendChart({ records, initialYear }: { records: Payslip[]; initi
       .map((p) => `${Number(p.month.slice(5, 7))}月 ${p.netPay === null ? '未登録' : yenSpeech(p.netPay)}`)
       .join('、');
 
+  const highlighted = trend.find((p) => p.month === highlightMonth && p.netPay !== null) ?? null;
   const index = years.indexOf(year);
 
   return (
     <View>
-      <View style={styles.yearRow}>
-        <Pressable
+      <View style={styles.header}>
+        <IconButton
+          icon="chevronLeft"
+          size={36}
+          accessibilityLabel="前の年"
           disabled={index <= 0}
           onPress={() => setYear(years[index - 1] ?? year)}
-          accessibilityRole="button"
-          accessibilityLabel="前の年"
-          hitSlop={10}
-          style={[styles.yearButton, index <= 0 && { opacity: 0.3 }]}
-        >
-          <Text style={styles.yearArrow}>‹</Text>
-        </Pressable>
-        <Text style={type.heading}>{year}年</Text>
-        <Pressable
+        />
+        <Text style={[type.headline, styles.year]}>{year}年</Text>
+        <IconButton
+          icon="chevronRight"
+          size={36}
+          accessibilityLabel="次の年"
           disabled={index >= years.length - 1}
           onPress={() => setYear(years[index + 1] ?? year)}
-          accessibilityRole="button"
-          accessibilityLabel="次の年"
-          hitSlop={10}
-          style={[styles.yearButton, index >= years.length - 1 && { opacity: 0.3 }]}
-        >
-          <Text style={styles.yearArrow}>›</Text>
-        </Pressable>
+        />
+        <Text style={[type.caption, styles.count]}>登録{registered}か月</Text>
       </View>
 
-      <View style={styles.chart} accessible accessibilityRole="image" accessibilityLabel={summary}>
-        {/* 0円の基準線。負の値がある年は途中に、無い年は下端に来る。 */}
-        <View style={[styles.baseline, { top: layout.baseline }]} />
-        {trend.map((point, i) => {
-          const m = Number(point.month.slice(5, 7));
-          const bar = layout.bars[i];
-          return (
-            <View key={point.month} style={styles.column}>
-              <View style={styles.barArea}>
-                {bar?.kind === 'positive' ? (
-                  <View style={[styles.bar, styles.barPositive, { top: bar.top, height: bar.height }]} />
-                ) : null}
-                {bar?.kind === 'negative' ? (
-                  <View style={[styles.bar, styles.barNegative, { top: bar.top, height: bar.height }]} />
-                ) : null}
-                {bar?.kind === 'zero' ? (
-                  <View style={[styles.zeroMark, { top: Math.min(Math.max(layout.baseline - 4, 0), BAR_AREA - 8) }]} />
-                ) : null}
-                {bar?.kind === 'missing' ? (
-                  <Text style={[styles.missingMark, { top: Math.min(Math.max(layout.baseline - 18, 0), BAR_AREA - 16) }]}>–</Text>
-                ) : null}
-              </View>
-              <Text style={styles.monthText}>{m}</Text>
-            </View>
-          );
-        })}
-      </View>
-      <View style={styles.legend}>
-        <View style={styles.legendItem}><View style={[styles.legendSwatch, styles.barPositive]} /><Text style={type.caption}>手取り（塗り）</Text></View>
-        {hasNegative ? (
-          <View style={styles.legendItem}><View style={[styles.legendSwatch, styles.barNegative]} /><Text style={type.caption}>マイナス（枠のみ・線より下）</Text></View>
+      {/* 年の切替では新しい年の内容だけをフェードする。棒の高さ・位置は動かさない（M7）。 */}
+      <EnterView key={year} opacity={0.4} duration={duration.release}>
+        {highlighted && highlighted.netPay !== null ? (
+          <View style={styles.highlight}>
+            <View style={[styles.swatch, { backgroundColor: colors.barStrong }]} />
+            <Text style={[type.caption, { flex: 1 }]}>
+              表示中の月 <Text style={{ color: colors.ink, fontWeight: '700' }}>{monthLabel(highlighted.month)}</Text>
+            </Text>
+            <Text style={type.moneyM} accessibilityLabel={yenSpeech(highlighted.netPay)}>{formatYen(highlighted.netPay)}</Text>
+          </View>
         ) : null}
-        <View style={styles.legendItem}><View style={[styles.legendSwatch, styles.zeroSwatch]} /><Text style={type.caption}>0円（線上の印）</Text></View>
+
+        <View style={styles.chart} accessible accessibilityRole="image" accessibilityLabel={summary}>
+          {/* 0円の基準線。負の値がある年は途中に、無い年は下端に来る。 */}
+          <View style={[styles.baseline, { top: layout.baseline }]} />
+          {trend.map((point, i) => {
+            const m = Number(point.month.slice(5, 7));
+            const bar = layout.bars[i];
+            const strong = point.month === highlighted?.month;
+            return (
+              <View key={point.month} style={styles.column}>
+                <View style={styles.barArea}>
+                  {bar?.kind === 'positive' ? (
+                    <View style={[styles.bar, styles.barPositive, strong && styles.barStrong, { top: bar.top, height: bar.height }]} />
+                  ) : null}
+                  {bar?.kind === 'negative' ? (
+                    <View style={[styles.bar, styles.barNegative, strong && { borderColor: colors.barStrong }, { top: bar.top, height: bar.height }]} />
+                  ) : null}
+                  {bar?.kind === 'zero' ? (
+                    <View style={[styles.zeroMark, { top: Math.min(Math.max(layout.baseline - 4, 0), BAR_AREA - 8) }]} />
+                  ) : null}
+                  {bar?.kind === 'missing' ? (
+                    <Text style={[styles.missingMark, { top: Math.min(Math.max(layout.baseline - 18, 0), BAR_AREA - 16) }]}>–</Text>
+                  ) : null}
+                </View>
+                <Text style={[styles.monthText, strong && styles.monthTextStrong]}>{m}</Text>
+              </View>
+            );
+          })}
+        </View>
+      </EnterView>
+
+      <View style={styles.legend}>
+        <View style={styles.legendItem}><View style={[styles.swatch, styles.barPositive]} /><Text style={type.caption}>手取り（塗り）</Text></View>
+        {highlighted ? (
+          <View style={styles.legendItem}><View style={[styles.swatch, styles.barStrong]} /><Text style={type.caption}>表示中の月（濃い塗り）</Text></View>
+        ) : null}
+        {hasNegative ? (
+          <View style={styles.legendItem}><View style={[styles.swatch, styles.barNegative]} /><Text style={type.caption}>マイナス（枠のみ・線より下）</Text></View>
+        ) : null}
+        <View style={styles.legendItem}><View style={[styles.swatch, styles.zeroSwatch]} /><Text style={type.caption}>0円（線上の印）</Text></View>
         <View style={styles.legendItem}><Text style={styles.legendDash}>–</Text><Text style={type.caption}>未登録</Text></View>
       </View>
 
@@ -97,40 +118,61 @@ export function TrendChart({ records, initialYear }: { records: Payslip[]; initi
         onPress={() => setShowTable((v) => !v)}
         accessibilityRole="button"
         accessibilityState={{ expanded: showTable }}
-        style={{ paddingVertical: space.sm }}
+        style={(state) => [styles.toggle, (state as { focused?: boolean }).focused && focusRing]}
       >
-        <Text style={styles.toggle}>{showTable ? '数値一覧を閉じる' : '数値一覧で見る'}</Text>
+        <Text style={styles.toggleText}>{showTable ? '数値一覧を閉じる' : '数値一覧で見る'}</Text>
+        <ToggleChevron open={showTable} size={18} />
       </Pressable>
       {showTable ? (
-        <View>
+        <EnterView translateY={-4} duration={duration.fast}>
           {trend.map((p, i) => (
             <View key={p.month}>
               {i > 0 ? <Divider /> : null}
               <Row label={monthLabel(p.month)}>
                 {p.netPay === null
                   ? <Text style={type.bodyMuted}>未登録</Text>
-                  : <Text style={type.money} accessibilityLabel={yenSpeech(p.netPay)}>{formatYen(p.netPay)}</Text>}
+                  : <Text style={type.moneyM} accessibilityLabel={yenSpeech(p.netPay)}>{formatYen(p.netPay)}</Text>}
               </Row>
             </View>
           ))}
-        </View>
+        </EnterView>
       ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  yearRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: space.md },
-  yearButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  yearArrow: { fontSize: 26, color: colors.primary, fontWeight: '600' },
+  header: { flexDirection: 'row', alignItems: 'center', gap: space.xxs, marginLeft: -space.xs, marginBottom: space.sm },
+  year: { minWidth: 64, textAlign: 'center', fontVariant: ['tabular-nums'] },
+  count: { marginLeft: 'auto' },
+  highlight: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: space.sm,
+    backgroundColor: colors.surfaceSunken,
+    borderRadius: radius.md,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    marginBottom: space.md,
+  },
   chart: { flexDirection: 'row', alignItems: 'flex-start', height: BAR_AREA + 22, gap: 4 },
-  baseline: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: colors.inkFaint },
+  // 0円の基準線は意味を持つ図形なので3:1以上の色
+  baseline: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: colors.inkMuted },
   column: { flex: 1, alignItems: 'center' },
   barArea: { height: BAR_AREA, width: '100%' },
-  bar: { position: 'absolute', left: '14%', width: '72%', borderRadius: radius.sm / 2 },
-  barPositive: { backgroundColor: colors.bar },
+  bar: { position: 'absolute', left: '18%', width: '64%' },
+  barPositive: { backgroundColor: colors.barMuted, borderTopLeftRadius: radius.xs, borderTopRightRadius: radius.xs },
+  barStrong: { backgroundColor: colors.barStrong },
   // 負の値は色に加えて「枠だけ」の形でも区別する。
-  barNegative: { backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.down, borderStyle: 'dashed' },
+  barNegative: {
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.down,
+    borderStyle: 'dashed',
+    borderBottomLeftRadius: radius.xs,
+    borderBottomRightRadius: radius.xs,
+  },
   zeroMark: {
     position: 'absolute',
     left: '30%',
@@ -141,12 +183,22 @@ const styles = StyleSheet.create({
     borderColor: colors.ink,
     backgroundColor: colors.surface,
   },
-  missingMark: { position: 'absolute', width: '100%', textAlign: 'center', fontSize: 13, color: colors.inkFaint },
-  monthText: { fontSize: 11, color: colors.inkMuted, marginTop: 4, fontVariant: ['tabular-nums'] },
-  legend: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space.lg, rowGap: space.xs, marginTop: space.sm },
+  missingMark: { ...fontBase, position: 'absolute', width: '100%', textAlign: 'center', fontSize: 13, fontWeight: '700', color: colors.inkMuted },
+  monthText: { ...fontBase, fontSize: 11, lineHeight: 14, color: colors.inkSubtle, marginTop: 4, fontVariant: ['tabular-nums'] },
+  monthTextStrong: { color: colors.ink, fontWeight: '800' },
+  legend: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space.lg, rowGap: space.xs, marginTop: space.md },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
-  legendSwatch: { width: 12, height: 12, borderRadius: 3 },
+  swatch: { width: 12, height: 12, borderRadius: 3 },
   zeroSwatch: { height: 8, borderRadius: 4, borderWidth: 1.5, borderColor: colors.ink, backgroundColor: colors.surface },
-  legendDash: { fontSize: 13, color: colors.inkFaint, width: 12, textAlign: 'center' },
-  toggle: { color: colors.primary, fontWeight: '600', fontSize: 14 },
+  legendDash: { ...fontBase, fontSize: 13, fontWeight: '700', color: colors.inkMuted, width: 12, textAlign: 'center' },
+  toggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
+    alignSelf: 'flex-start',
+    minHeight: TOUCH,
+    marginTop: space.xs,
+    borderRadius: radius.sm,
+  },
+  toggleText: { ...fontBase, color: colors.primary, fontWeight: '700', fontSize: 14 },
 });
