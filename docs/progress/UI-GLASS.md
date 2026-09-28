@@ -2,6 +2,27 @@
 
 2026-09-29。設計は `docs/UI-GLASS-DESIGN.md`（レビュー08のD-M1〜D-M4、管理側の観点、Solのコントラスト再計算を反映）。この段階の対象はG1の基盤、G2の機能層、ホームの統合。ほかの画面のレイアウト改善（G3）は次の段階で行う。
 
+**現在の状態:** Glass基盤・ナビ/ヘッダー・ホームと、Webの読み上げ状態/強制カラー/動き設定の限定修正を保存済み。G3の7画面は未着手。新しい極小区画の回帰検査が失敗しているため、全体E2Eは未合格、main統合は保留。
+
+## 独立QAの最新結果
+
+- 型/lint・145単体テストが成功。Webの新しいexportで公開Chromium E2E29件が成功し、撮影専用1件はskip。WebKitの390px比較6件も成功した。
+- 安定した描画後に13枚を撮影し、ページ/コンソールエラーは0。WebのARIA状態、強制色light/darkの棒・アイコン・フォーカス、通常色、透明度の代替表示を確認した。
+- 非UIの契約点検ではdomain/services/native OCR/設定プラグイン/useAppData/chartScaleは`1cfdf62`から不変。保存・置換・破棄・デモ・復元・比較の意味に回帰は見つからなかった。
+- **未解消 G-C1（割合帯）:** 区画のborderが極小区画へ固定幅を与える。総支給10億円・手取り999,999,999円・控除1円を通常操作で保存すると、390px画面で控除区画の比例期待幅は約0.000000306px、実幅は2px。320pxでも2pxだった。金額ラベルと保存値は正しく、視覚的な割合だけが影響する。
+- G-C1を公開`e2e/glass.spec.ts`へ追加し、320/390の両幅で失敗することを確認した。許容差はCSSの丸めに対する1/64pxだけ。skip/fixmeで除外していない。前述の29件成功はこの新しい検査を追加する前の結果であり、全体合格を意味しない。
+- 次は、幅を消費する縁を除くか、配置幅を変えない装飾へ移し、この回帰を通してからG3へ進む。修正・G3統合後に独立レビューと全体CIを通す。
+
+## Webの途中画面
+
+すべて架空データ。元の参考画像は含めていない。nativeの素材表示は実機未確認。
+
+| 改修前 | Glass基盤・ホーム |
+| --- | --- |
+| ![改修前のホーム](../screenshots/home-before.png) | ![改修途中のGlassホーム](../screenshots/home-glass-progress.png) |
+
+[強制カラーdarkの表示](../screenshots/home-forced-colors.png)も確認した。これはアプリに通常のダークテーマを追加したものではない。
+
 ## 変更
 
 - **G1 基盤（`src/ui/glass/`）**
@@ -60,3 +81,22 @@
 - 設計 §9 の表に沿って、履歴・ガイド・設定・追加方式・確認編集・詳細・初回案内（読込・失敗を含む）を Glass の体系で組み直す。機能・文言・確認の流れは維持する。
 - 詳細画面の0項目の文言を、事実に合う表現に直す。
 - `layout.tsx` の `navReserve` はもう使っていない。次の段階で整理する。
+
+## 実画面QA後の限定修正（2026-09-29、HEAD `8778da8` の上）
+
+独立Web QA（Chromium・WebKit）で見つかった実害だけを直した。データ・保存条件・確認の意味、金額と棒の geometry は変えていない。
+
+- **Web の ARIA 状態:** RN Web 0.21 は `accessibilityState` を DOM へ出さない。`src/ui/a11y.ts` の `a11yState` で、Web だけ同じ状態を `aria-selected`・`aria-checked`・`aria-busy`・`aria-expanded` でも出す。native は従来どおり `accessibilityState` だけ（aria-* は合成されるので渡さない）。
+  - 対象: TabBar のタブ、Segmented、Checkbox、Button（busy）、項目 Chip（radio。Web は `aria-checked`、native は従来の selected）、推移の数値一覧・ガイド・読み取り行・追加方式カードの開閉。
+  - disabled は Pressable の `disabled` が Web でも `aria-disabled` を出すので変えていない。
+- **強制色（Web の `forced-colors: active`）:**
+  - 推移の棒・0円線・凡例の見本・割合帯の区画・割合帯の凡例の見本は、塗りが Canvas に置き換わって消えていた。`glass/forcedColors.web.ts` が media 内だけの規則を1つの style 要素で入れ、対象の要素だけ `forced-color-adjust: none` にしてシステム色で塗る。通常の棒・0円線・控除合計は CanvasText、表示中の月・手取りの区画は Highlight、表示中の月が負の時は Canvas の地に Highlight の破線の縁。負の棒・0円の印・未登録の「–」は、縁と文字が強制色でも残るので変えていない。
+  - native・vitest・tsc が読む `forcedColors.ts` は何も付けない。形・大きさ・最小値は変えていない。ページ全体の強制色は無効にしていない。
+  - SVG アイコンは stroke/fill が強制されず、暗い強制色で濃紺のまま沈んでいた。Web だけ線と塗りを `currentColor` にし、色を包む要素の `color` で渡す。強制色では文字と同じシステム色になる。native は従来どおり色を直接渡す。
+- **L4（入場中の動きを減らす）:** `useEnterAnimation` は購読の状態が full 以外に変わると、再生中の入場を止めて最終状態にする。unknown で表示した内容を後から隠したり再入場させたりはしない。押下・選択・開閉の hook は変えていない。
+- **Low の扱い（G3 で対応）:** L1 は「戻るを最初の Tab にするため、ヘッダーを帯より先の DOM 順にする」意図を G3 で設計に記録する。L2 の `right` スロットは当面使わない。L3 は G3 の設定画面で確認する。L5 のナビ再入場は短い反応として現状を採用する。L6 は可読性の下限と fallback を維持し、未対応判定を過剰に断定しない。
+
+### 検証（この環境）
+
+- `npx.cmd tsc --noEmit`: エラーなし。`npm.cmd run lint`: エラー・警告なし。`npm.cmd test`: 9ファイル・145件が合格。
+- ブラウザ・E2E・撮影は、修正後に QA 担当が独立環境で行う（ここでは実行していない）。未確認: 強制色 light/dark での棒・アイコンの実描画、Web の aria-* の実DOM、native の非回帰（native の状態は変えていない）。

@@ -3,6 +3,7 @@ import { colors, shadow } from '../theme';
 import type { GlassState } from './glassMode';
 import { useGlass } from './GlassProvider';
 
+export { forcedFill, type ForcedFill } from './forcedColors';
 export { BlurTarget, GlassProvider, useGlass } from './GlassProvider';
 export { GlassSurface } from './GlassSurface';
 export { Scene } from './Scene';

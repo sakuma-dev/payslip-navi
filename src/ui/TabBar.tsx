@@ -1,5 +1,6 @@
 import React from 'react';
 import { Animated, LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
+import { a11yState } from './a11y';
 import { GlassSurface, useGlass } from './glass';
 import { Icon, IconName } from './icons';
 import { useInsets } from './insets';
@@ -62,7 +63,7 @@ export function TabBar<K extends string>({ tabs, selected, onSelect, disabled, o
                 disabled={disabled}
                 accessibilityRole="tab"
                 accessibilityLabel={tab.label}
-                accessibilityState={{ selected: isSelected, disabled: !!disabled }}
+                {...a11yState({ selected: isSelected, disabled: !!disabled })}
                 style={(state) => [
                   styles.tab,
                   // 位置を測る前だけ、選択中のタブ自身にカプセルの地と縁を付ける

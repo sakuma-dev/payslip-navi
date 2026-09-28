@@ -44,6 +44,14 @@ async function focusByTab(page: Page, target: Locator) {
   throw new Error('The action cannot be reached with Tab');
 }
 
+async function focusByShiftTab(page: Page, target: Locator) {
+  for (let i = 0; i < 80; i += 1) {
+    await page.keyboard.press('Shift+Tab');
+    if (await target.evaluate((element) => element === document.activeElement)) return;
+  }
+  throw new Error('The action cannot be reached with Shift+Tab');
+}
+
 async function addFictionalRecord(page: Page, month: string, gross: string, deductions: string, net: string, first = false) {
   await page.getByRole('button', { name: first ? '自分の明細を追加する' : '明細を追加する' }).click();
   await page.getByRole('button', { name: '手入力する' }).click();
@@ -104,6 +112,30 @@ test('half of the trend bars appear above the floating navigation on a 390px Web
   expect(plot!.y + 72).toBeLessThanOrEqual(nav!.y);
 });
 
+test('the whole trend plot clears the navigation without status banners at 390px', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await addFictionalRecord(page, '2026-09', '300000', '50000', '250000', true);
+  // Web always shows its preview warning; hide that presentation-only banner to
+  // measure the banner-free layout used on a native tab screen.
+  await page.getByRole('alert').evaluate((banner) => { (banner as HTMLElement).style.display = 'none'; });
+  const plot = await page.getByRole('img', { name: /手取り推移/ }).boundingBox();
+  const nav = await page.getByRole('tablist').last().boundingBox();
+  expect(plot).not.toBeNull();
+  expect(nav).not.toBeNull();
+  expect(plot!.y + 144).toBeLessThanOrEqual(nav!.y);
+});
+
+test('the Web accessibility tree contains the signed monthly change and comparison month', async ({ page }) => {
+  await openFictionalDemo(page);
+  const snapshot = await page.locator('body').ariaSnapshot();
+  expect(snapshot).toMatch(/\+9,000円\s+増/);
+  expect(snapshot).toContain('前月（2026年8月）比');
+  const trend = await page.getByRole('img', { name: /手取り推移/ }).getAttribute('aria-label');
+  expect(trend).toContain('9月');
+  expect(trend).toContain('8月');
+});
+
 test('reduced motion never hides content, including after changing the preference', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
@@ -159,11 +191,15 @@ test('keyboard opening of delete confirmation cannot delete on the next Enter an
   await page.keyboard.press('Enter');
   const title = page.getByText('2026年9月の明細を削除しますか');
   await expect(title).toBeVisible();
+  await expect(title.locator('..')).toBeFocused();
   await page.keyboard.press('Enter');
-  if (await title.isVisible()) await page.getByRole('button', { name: 'やめる', exact: true }).click();
+  await expect(title).toBeVisible();
+  await expect(title.locator('..')).toBeFocused();
+  await page.getByRole('button', { name: 'やめる', exact: true }).click();
   await expect(trigger).toBeVisible();
   await expect(trigger).toBeFocused();
   await expect(page.getByText('248,550円').first()).toBeVisible();
+  await expect(page.getByText('2026年9月（支払月）')).toBeVisible();
 });
 
 test('keyboard opening of same-month replacement cannot replace on the next Enter and restores focus', async ({ page }) => {
@@ -181,11 +217,37 @@ test('keyboard opening of same-month replacement cannot replace on the next Ente
   await page.keyboard.press('Enter');
   const title = page.getByText('2026年9月は登録済みです');
   await expect(title).toBeVisible();
+  await expect(title.locator('..')).toBeFocused();
   await page.keyboard.press('Enter');
-  if (await title.isVisible()) await page.getByRole('button', { name: 'やめて見直す' }).click();
+  await expect(title).toBeVisible();
+  await expect(title.locator('..')).toBeFocused();
+  await page.getByRole('button', { name: 'やめて見直す' }).click();
   await expect(trigger).toBeVisible();
   await expect(trigger).toBeFocused();
   await page.getByRole('button', { name: 'やめる', exact: true }).click();
   await page.getByRole('button', { name: '入力内容を破棄する' }).click();
   await expect(page.getByText('250,000円').first()).toBeVisible();
+  await expect(page.getByText('2026年9月の手取り')).toBeVisible();
+  await expect(page.getByText('260,000円', { exact: true })).toHaveCount(0);
+});
+
+test('keyboard opening of demo discard cannot confirm on the next Enter and restores focus', async ({ page }) => {
+  await openFictionalDemo(page);
+  await page.getByRole('button', { name: 'この明細を詳しく見る' }).click();
+  await page.getByRole('button', { name: 'この明細を編集' }).click();
+  const gross = page.getByRole('textbox', { name: '総支給額' });
+  await gross.fill('320000');
+  const trigger = page.getByRole('button', { name: 'デモを終了' });
+  await focusByShiftTab(page, trigger);
+  await page.keyboard.press('Enter');
+  const title = page.getByText('編集中の内容を破棄してデモを終了しますか');
+  await expect(title).toBeVisible();
+  await expect(title.locator('..')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(title).toBeVisible();
+  await expect(title.locator('..')).toBeFocused();
+  await page.getByRole('button', { name: '編集を続ける' }).click();
+  await expect(trigger).toBeFocused();
+  await expect(gross).toHaveValue('320000');
+  await expect(page.getByText('デモ（架空データ）表示中')).toBeVisible();
 });

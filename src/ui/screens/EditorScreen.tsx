@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { Category, DraftItem, Issue, ItemCode, Payslip, PayslipDraft } from '../../domain';
 import { buildPayslip } from '../../domain';
+import { a11yState } from '../a11y';
 import { Badge, Banner, Button, Card, Checkbox, Chip, Dialog, Field, SectionTitle } from '../components';
 import { CATEGORY_LABEL, CODE_LABEL, CODES_BY_CATEGORY, currentMonth, errorMessage, monthLabel, shiftMonth } from '../format';
 import { categoryColor, colors, radius, space, type } from '../theme';
@@ -182,7 +183,7 @@ export function EditorScreen({ session, records, demo, onSave, onSaved, onCancel
           <Pressable
             onPress={() => setShowLines((v) => !v)}
             accessibilityRole="button"
-            accessibilityState={{ expanded: showLines }}
+            {...a11yState({ expanded: showLines })}
             style={styles.linesHead}
           >
             <Text style={[type.heading, { flex: 1 }]}>読み取った行（{lines.length}行）</Text>

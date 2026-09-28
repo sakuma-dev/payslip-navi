@@ -59,6 +59,7 @@ export interface EnterOptions {
 }
 
 // マウント時に1回だけの入場。マウント時点で「動きあり」と確定していなければ最終状態で表示し、後から再生しない。
+// 入場の途中で「動きを減らす」になった時は、その場で止めて最終状態にする（再生し直さない）。
 export function useEnterAnimation(options: EnterOptions = {}) {
   const { status } = useMotion();
   const [animate] = useState(() => status === 'full');
@@ -74,11 +75,17 @@ export function useEnterAnimation(options: EnterOptions = {}) {
 
   useEffect(() => {
     if (!animate) return undefined;
+    if (status !== 'full') {
+      // 直前の effect の cleanup で止まっている。表示済みの内容なので最終状態へそろえる（隠さない）。
+      progress.stopAnimation();
+      progress.setValue(1);
+      return undefined;
+    }
     const timing = Animated.timing(progress, { toValue: 1, duration: config.duration, easing: easeOut, useNativeDriver });
     const anim = config.delay > 0 ? Animated.sequence([Animated.delay(config.delay), timing]) : timing;
     anim.start();
     return () => anim.stop();
-  }, [animate, config, progress]);
+  }, [animate, config, progress, status]);
 
   const [style] = useState(() => {
     const between = (from: number, to: number) => progress.interpolate({ inputRange: [0, 1], outputRange: [from, to] });

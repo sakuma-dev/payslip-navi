@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { GUIDE_ENTRIES } from '../../domain';
+import { a11yState } from '../a11y';
 import { SourceLinks } from '../ComparisonView';
 import { Banner, Card } from '../components';
 import { colors, space, type } from '../theme';
@@ -20,7 +21,7 @@ export function GuideScreen() {
             <Pressable
               onPress={() => setOpen(expanded ? null : key)}
               accessibilityRole="button"
-              accessibilityState={{ expanded }}
+              {...a11yState({ expanded })}
               accessibilityLabel={`${entry.title}の説明を${expanded ? '閉じる' : '開く'}`}
               style={styles.head}
             >

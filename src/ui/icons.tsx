@@ -1,7 +1,9 @@
 import React from 'react';
-import { View } from 'react-native';
+import { Platform, View, ViewStyle } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { colors } from './theme';
+
+const IS_WEB = Platform.OS === 'web';
 
 // アプリ独自の線アイコン（24グリッド・線幅1.75・丸い端）。装飾扱いで読み上げない。
 // 名前は操作側の accessibilityLabel で持たせる。
@@ -71,9 +73,12 @@ export function Icon({ name, size = 20, color = colors.ink, strokeWidth = 1.75 }
   strokeWidth?: number;
 }) {
   const shapes: Shape[] = ICONS[name];
+  // Web は線と塗りを currentColor にし、色は包む要素の color で渡す。強制色では color がシステム色に置き換わるので、
+  // SVG の stroke/fill が元の色のまま背景に沈まず、文字と同じ色で見える。native は従来どおり色を直接渡す。
+  const paint = IS_WEB ? 'currentColor' : color;
   return (
     <View
-      style={{ width: size, height: size }}
+      style={[{ width: size, height: size }, IS_WEB && ({ color } as ViewStyle)]}
       pointerEvents="none"
       accessible={false}
       accessibilityElementsHidden
@@ -84,16 +89,16 @@ export function Icon({ name, size = 20, color = colors.ink, strokeWidth = 1.75 }
         {shapes.map((shape, i) => {
           if ('d' in shape) {
             return (
-              <Path key={i} d={shape.d} stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+              <Path key={i} d={shape.d} stroke={paint} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" fill="none" />
             );
           }
           if ('cx' in shape) {
             return shape.fill
-              ? <Circle key={i} cx={shape.cx} cy={shape.cy} r={shape.r} fill={color} />
-              : <Circle key={i} cx={shape.cx} cy={shape.cy} r={shape.r} stroke={color} strokeWidth={strokeWidth} fill="none" />;
+              ? <Circle key={i} cx={shape.cx} cy={shape.cy} r={shape.r} fill={paint} />
+              : <Circle key={i} cx={shape.cx} cy={shape.cy} r={shape.r} stroke={paint} strokeWidth={strokeWidth} fill="none" />;
           }
           return (
-            <Rect key={i} x={shape.x} y={shape.y} width={shape.w} height={shape.h} rx={shape.rx} stroke={color} strokeWidth={strokeWidth} strokeLinejoin="round" fill="none" />
+            <Rect key={i} x={shape.x} y={shape.y} width={shape.w} height={shape.h} rx={shape.rx} stroke={paint} strokeWidth={strokeWidth} strokeLinejoin="round" fill="none" />
           );
         })}
       </Svg>

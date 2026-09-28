@@ -3,6 +3,7 @@ import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-nati
 import type { ParsedDraft } from '../../domain';
 import { emptyDraft, parseOcr, parsePayslipText } from '../../domain';
 import { isNativeOcrAvailable, pickAndRecognizeImage } from '../../services';
+import { a11yState } from '../a11y';
 import { Banner, Button, Card, Field } from '../components';
 import { currentMonth, errorMessage } from '../format';
 import { colors, radius, space, type } from '../theme';
@@ -163,7 +164,7 @@ function MethodCard({ title, body, onPress, disabled, busy, expanded }: {
       accessibilityRole="button"
       accessibilityLabel={title}
       accessibilityHint={body}
-      accessibilityState={{ disabled: !!disabled, busy: !!busy, expanded }}
+      {...a11yState({ disabled: !!disabled, busy: !!busy, expanded })}
       style={({ pressed }) => [styles.method, disabled && { opacity: 0.45 }, pressed && { opacity: 0.7 }]}
     >
       <View style={styles.methodMark} />

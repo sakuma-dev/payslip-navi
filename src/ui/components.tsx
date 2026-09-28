@@ -19,12 +19,13 @@ import {
   ViewStyle,
 } from 'react-native';
 import { formatYen } from '../domain';
+import { a11yState } from './a11y';
 import { changeWord, signedSpeech, signedYen, yenSpeech } from './format';
 import { Icon, IconName } from './icons';
 import { useInsets } from './insets';
 import { EnterView, useLayoutMetrics } from './layout';
 import { duration, useEnterAnimation, usePressScale, useSlidingIndicator, useToggleProgress } from './motion';
-import { GlassSurface, useGlass, useSurfaceStyle } from './glass';
+import { ForcedFill, forcedFill, GlassSurface, useGlass, useSurfaceStyle } from './glass';
 import { colors, focusRing, focusRingInset, fontBase, radius, shadow, space, TOUCH, type } from './theme';
 import { CONTENT_MAX_WIDTH, DeltaEmphasis, SplitBarModel, splitYen, tileColumns } from './visual';
 
@@ -129,7 +130,7 @@ export function Button({ label, onPress, variant = 'primary', disabled, busy, hi
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityHint={hint}
-      accessibilityState={{ disabled: !!inactive, busy: !!busy }}
+      {...a11yState({ disabled: !!inactive, busy: !!busy })}
       style={(state) => [styles.buttonHit, style, isFocused(state) && focusRing]}
     >
       {({ pressed }) => (
@@ -327,6 +328,8 @@ export function StatTiles({ items, width, spacing }: {
           <View style={styles.tileLabelRow}>
             {item.marker === 'legend' ? (
               <View
+                // 強制色では帯の区画と同じシステム色で塗る（0円の枠だけの見本は縁が残るのでそのまま）
+                {...(item.value === 0 ? null : forcedFill(SPLIT_FORCED[item.color] ?? 'ink'))}
                 style={[
                   styles.legendSwatch,
                   // 塗りと同じ色の縁も持たせ、forced-colors で塗りが消えても見本が残るようにする
@@ -348,6 +351,9 @@ export function StatTiles({ items, width, spacing }: {
   );
 }
 
+// 強制色（Web）での割合帯と凡例の見本の塗り。手取りは選択色、控除合計は文字色で区別する。
+const SPLIT_FORCED: Record<string, ForcedFill> = { [colors.primary]: 'accent', [colors.catDeduction]: 'ink' };
+
 // 総支給＝帯全体。手取りと控除合計を金額比の幅で並べ、0円の区画・最小幅は足さない。
 // 文字付きの凡例は、呼び出し側の数値タイル（marker="legend"）が兼ねる。
 export function SplitBar({ model }: { model: Extract<SplitBarModel, { visible: true }> }) {
@@ -356,10 +362,11 @@ export function SplitBar({ model }: { model: Extract<SplitBarModel, { visible: t
     <View style={[styles.splitBar, model.gap && { gap: 2 }]} accessible accessibilityRole="image" accessibilityLabel={label}>
       {model.segments.map((segment) => {
         const fill = segment.kind === 'net' ? colors.primary : colors.catDeduction;
-        // 同じ色の縁は forced-colors で塗りが消えても区画を残すため
+        // 同じ色の縁は forced-colors で塗りが消えても区画を残すため。Web の強制色では区画をシステム色で塗り分ける
         return (
           <View
             key={segment.kind}
+            {...forcedFill(SPLIT_FORCED[fill] ?? 'ink')}
             style={{ flexGrow: segment.weight, flexShrink: 1, flexBasis: 0, backgroundColor: fill, borderWidth: 1, borderColor: fill }}
           />
         );
@@ -393,7 +400,7 @@ export function Segmented<K extends string>({ options, value, onChange, accessib
             onPress={() => onChange(option.key)}
             onLayout={indicator.onItemLayout(index)}
             accessibilityRole="tab"
-            accessibilityState={{ selected }}
+            {...a11yState({ selected })}
             accessibilityLabel={option.label}
             style={(state) => [
               styles.segment,
@@ -545,7 +552,7 @@ export function Checkbox({ checked, onChange, label }: { checked: boolean; onCha
     <Pressable
       onPress={() => onChange(!checked)}
       accessibilityRole="checkbox"
-      accessibilityState={{ checked }}
+      {...a11yState({ checked })}
       accessibilityLabel={label}
       style={(state) => [styles.checkRow, isFocused(state) && focusRing]}
     >
@@ -562,7 +569,8 @@ export function Chip({ label, selected, onPress }: { label: string; selected: bo
     <Pressable
       onPress={onPress}
       accessibilityRole="radio"
-      accessibilityState={{ selected }}
+      // native は従来の selected。Web の radio は aria-checked で選択を示す
+      {...a11yState({ selected }, { checked: selected })}
       accessibilityLabel={label}
       style={(state) => [styles.chipHit, isFocused(state) && focusRing]}
     >

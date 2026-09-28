@@ -2,9 +2,11 @@ import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Payslip } from '../domain';
 import { buildTrend, formatYen } from '../domain';
+import { a11yState } from './a11y';
 import { layoutBars } from './chartScale';
 import { Divider, IconButton, Row, ToggleChevron } from './components';
 import { monthLabel, yenSpeech } from './format';
+import { forcedFill } from './glass';
 import { EnterView } from './layout';
 import { duration } from './motion';
 import { colors, focusRing, fontBase, radius, space, TOUCH, type } from './theme';
@@ -65,7 +67,8 @@ export function TrendChart({ records, initialYear, highlightMonth }: {
       <EnterView key={year} opacity={0.4} duration={duration.release}>
         <View style={styles.chart} accessible accessibilityRole="image" accessibilityLabel={summary}>
           {/* 0円の基準線。負の値がある年は途中に、無い年は下端に来る。 */}
-          <View style={[styles.baseline, { top: layout.baseline }]} />
+          {/* 強制色では塗りが消えるので、塗りで意味を持つ図形はシステム色で塗る（Web のみ。形は変えない） */}
+          <View {...forcedFill('ink')} style={[styles.baseline, { top: layout.baseline }]} />
           {trend.map((point, i) => {
             const m = Number(point.month.slice(5, 7));
             const bar = layout.bars[i];
@@ -74,10 +77,16 @@ export function TrendChart({ records, initialYear, highlightMonth }: {
               <View key={point.month} style={styles.column}>
                 <View style={styles.barArea}>
                   {bar?.kind === 'positive' ? (
-                    <View style={[styles.bar, styles.barPositive, strong && styles.barStrong, { top: bar.top, height: bar.height }]} />
+                    <View
+                      {...forcedFill(strong ? 'accent' : 'ink')}
+                      style={[styles.bar, styles.barPositive, strong && styles.barStrong, { top: bar.top, height: bar.height }]}
+                    />
                   ) : null}
                   {bar?.kind === 'negative' ? (
-                    <View style={[styles.bar, styles.barNegative, strong && { borderColor: colors.barStrong }, { top: bar.top, height: bar.height }]} />
+                    <View
+                      {...(strong ? forcedFill('accentEdge') : null)}
+                      style={[styles.bar, styles.barNegative, strong && { borderColor: colors.barStrong }, { top: bar.top, height: bar.height }]}
+                    />
                   ) : null}
                   {bar?.kind === 'zero' ? (
                     <View style={[styles.zeroMark, { top: Math.min(Math.max(layout.baseline - 4, 0), BAR_AREA - 8) }]} />
@@ -94,10 +103,10 @@ export function TrendChart({ records, initialYear, highlightMonth }: {
       </EnterView>
 
       <View style={styles.legend}>
-        <View style={styles.legendItem}><View style={[styles.swatch, styles.barPositive]} /><Text style={type.caption}>手取り（塗り）</Text></View>
+        <View style={styles.legendItem}><View {...forcedFill('ink')} style={[styles.swatch, styles.barPositive]} /><Text style={type.caption}>手取り（塗り）</Text></View>
         {highlighted ? (
           <View style={styles.legendItem}>
-            <View style={[styles.swatch, styles.barStrong]} />
+            <View {...forcedFill('accent')} style={[styles.swatch, styles.barStrong]} />
             <Text style={type.caption}>表示中の月（濃い塗り・{Number(highlighted.month.slice(5, 7))}月）</Text>
           </View>
         ) : null}
@@ -111,7 +120,7 @@ export function TrendChart({ records, initialYear, highlightMonth }: {
       <Pressable
         onPress={() => setShowTable((v) => !v)}
         accessibilityRole="button"
-        accessibilityState={{ expanded: showTable }}
+        {...a11yState({ expanded: showTable })}
         style={(state) => [styles.toggle, (state as { focused?: boolean }).focused && focusRing]}
       >
         <Text style={styles.toggleText}>{showTable ? '数値一覧を閉じる' : '数値一覧で見る'}</Text>

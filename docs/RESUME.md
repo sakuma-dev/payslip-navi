@@ -3,8 +3,8 @@
 2026-09-28。
 
 - 状態: 初版完了後、`feat/ui-refresh` でUIを改修中。本人の追加依頼によりLiquid Glass風へ方向を更新した。現行要件は `UI-GLASS-BRIEF.md`、受入は `UI-REFRESH-GOAL.md`。
-- UIの現在地: 第1段階のホーム・共通部品・ナビを実装し、レビュー07の確認ダイアログ/密度/読み上げ/文言を修正。93テスト、型/lint、公開Web E2E15件が成功（撮影専用1件skip）。Glassの依存2件は導入済み、具体的な差分設計と実装は未完了。
-- UIの次の一手: Opus 5.5 highがLiquid Glassの差分設計を完成→Opus 5.5 mediumが設計と07修正をレビュー→highが全画面実装→独立QA/最終レビュー。既存mainは初版のまま。未承認の刷新を完成扱いでmainへ統合しない。
+- UIの現在地: Glass設計08、基盤/ナビ/ホームのレビュー09、Webの読み上げ・強制カラー・動き設定の限定修正まで保存。型/lint・145単体、独立Web E2E29件とWebKit390比較6件が成功。その後に追加した極小区画の公開回帰1件が失敗しているため、全体E2Eは未合格。詳細は `progress/UI-GLASS.md`。
+- UIの次の一手: Opus 5.5 highがSplitBarの固定幅バグG-C1を修正し、公開回帰を通す→設計のG3表に沿って残り7画面の配置を改修→mediumの独立レビュー→全体QA/CI/main共有。既存mainは初版のまま。未承認の刷新を完成扱いでmainへ統合しない。
 - UIチェックポイントのCI: `1cfdf62` でChecks/Native builds成功。Glass依存を含むWeb/Android/iOS production JSと両OS compileまで確認した。これはGlass UIの完成・実機での素材表示の確認ではない。
 - リポジトリ: https://github.com/sakuma-dev/payslip-navi
 - 設計: ARCHITECTURE.md。公開インターフェース: CONTRACTS.md。
