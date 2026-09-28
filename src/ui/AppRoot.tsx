@@ -14,9 +14,10 @@ import { draftFromPayslip } from '../domain';
 import { isWebPreview } from '../services';
 import { Button, Dialog, LargeTitle, ScreenHeader } from './components';
 import { monthLabel } from './format';
+import { BlurTarget, GlassProvider, Scene } from './glass';
 import { Icon } from './icons';
 import { useInsets } from './insets';
-import { EnterView, navReserve, Screen, useLayoutMetrics } from './layout';
+import { EnterView, NAV_GAP, NAV_HEIGHT, Screen } from './layout';
 import { duration, MotionProvider } from './motion';
 import { AddMethodScreen, NewDraft } from './screens/AddMethodScreen';
 import { DetailScreen } from './screens/DetailScreen';
@@ -63,7 +64,9 @@ function routeKey(route: Route): string {
 export function AppRoot() {
   return (
     <MotionProvider>
-      <AppShell />
+      <GlassProvider>
+        <AppShell />
+      </GlassProvider>
     </MotionProvider>
   );
 }
@@ -71,7 +74,6 @@ export function AppRoot() {
 function AppShell() {
   const data = useAppData();
   const insets = useInsets();
-  const metrics = useLayoutMetrics();
   const [tab, setTabState] = useState<Tab>('home');
   const [stack, setStack] = useState<Route[]>([]);
   const [transition, setTransition] = useState<Transition>('tab');
@@ -79,6 +81,10 @@ function AppShell() {
   const [exitDemoOpen, setExitDemoOpen] = useState(false);
   const backGuard = useRef<(() => boolean) | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+  // 浮遊ヘッダーの位置とナビ・ヘッダーの実測の高さ（docs/UI-GLASS-DESIGN.md §4）。null は layout 前。
+  const [measuredRegionTop, setRegionTop] = useState<number | null>(null);
+  const [headerHeight, setHeaderHeight] = useState(HEADER_ESTIMATE);
+  const [navHeight, setNavHeight] = useState(NAV_HEIGHT);
 
   const demo = data.mode === 'demo';
   const top = stack[stack.length - 1] ?? null;
@@ -168,7 +174,7 @@ function AppShell() {
 
   let header: React.ReactNode = null;
   let body: React.ReactNode;
-  // ホームは青いステージを画面幅いっぱいに描くため、ガターを自分で持つ。
+  // ホームはヒーローと本文の列を自分で組むため、ガターを自分で持つ。
   let fullBleed = false;
   let bodyKey = 'static';
 
@@ -281,44 +287,80 @@ function AppShell() {
   }, [bodyKey, stack.length]);
 
   const showTabs = data.phase.status === 'ready' && !showOnboarding && stack.length === 0;
-  const hasBars = isWebPreview || demo;
-  // 帯が無く、ホームのステージが画面幅いっぱいの時だけ、safe area上端を青くして白いステータスバーにする。
-  const blueTop = showTabs && tab === 'home' && !hasBars && metrics.sizeClass !== 'wide';
+  // 浮遊ヘッダーの上端（root 基準）。region の layout.y は column 基準で、column の paddingTop（safe area）と
+  // 帯の高さをすでに含む。column は root の y=0 にあるので、そのまま使う（safe area を足し直さない）。
+  const regionTop = measuredRegionTop ?? insets.top + (isWebPreview ? WEB_BAR_ESTIMATE : 0) + (demo ? TOUCH : 0);
+  const bottomReserve = showTabs ? navHeight + NAV_GAP + insets.bottom + 24 : insets.bottom + space.xxl + space.sm;
 
-  // 入場の動き: タブは下から、スタックは進む/戻るの向きから。ホームのステージは動かさない（内側で段階表示）。
+  // 入場の動き: タブは下から、スタックは進む/戻るの向きから。ホームのヒーローは動かさない（内側で段階表示）。
   const enter = fullBleed
     ? { opacity: 1 }
     : transition === 'push' ? { translateX: 16, duration: duration.slow }
       : transition === 'pop' ? { translateX: -16, duration: duration.slow }
         : { translateY: 8, duration: duration.base };
 
+  // 層の順（docs/UI-GLASS-DESIGN.md §4）: ヘッダー（ツリーの先頭・zIndex 2）→ BlurTarget（Scene・帯・本文）→ ナビ（最後）。
+  // ガラスの面は BlurTarget の外側の兄弟に置き、ガラスとその祖先には opacity<1 を掛けない。
   return (
-    <View style={[styles.root, { paddingTop: insets.top, backgroundColor: blueTop ? colors.primaryDeep : colors.canvas }]}>
-      <StatusBar style={blueTop ? 'light' : 'dark'} />
-      {isWebPreview ? (
-        <View style={styles.webBar} accessibilityRole="alert">
-          <Icon name="alert" size={16} color={colors.warning} />
-          <Text style={styles.webText}>Webプレビュー：保存されず、再読込で消えます</Text>
+    <View style={styles.root}>
+      <StatusBar style="dark" />
+      {header ? (
+        <View
+          style={[styles.headerLayer, { top: regionTop }]}
+          pointerEvents="box-none"
+          onLayout={(event) => setHeaderHeight(event.nativeEvent.layout.height)}
+        >
+          {header}
         </View>
       ) : null}
-      {demo ? (
-        <View style={styles.demoBar}>
-          <Icon name="layers" size={16} color={colors.onPrimary} />
-          <Text style={styles.demoText}>デモ（架空データ）表示中</Text>
-          <Pressable
-            onPress={requestStopDemo}
-            disabled={data.busy}
-            accessibilityRole="button"
-            accessibilityLabel="デモを終了"
-            accessibilityState={{ disabled: data.busy }}
-            style={(state) => [styles.demoExitHit, data.busy && { opacity: 0.5 }, (state as { focused?: boolean }).focused && focusRingOnDark]}
-          >
-            <View style={styles.demoExitPill}>
-              <Text style={styles.demoExit}>終了</Text>
+      <BlurTarget style={styles.fill}>
+        <Scene />
+        <View style={[styles.fill, { paddingTop: insets.top }]}>
+          {isWebPreview ? (
+            <View style={styles.webBar} accessibilityRole="alert">
+              <Icon name="alert" size={16} color={colors.warning} />
+              <Text style={styles.webText}>Webプレビュー：保存されず、再読込で消えます</Text>
             </View>
-          </Pressable>
+          ) : null}
+          {demo ? (
+            <View style={styles.demoBar}>
+              <Icon name="layers" size={16} color={colors.onPrimary} />
+              <Text style={styles.demoText}>デモ（架空データ）表示中</Text>
+              <Pressable
+                onPress={requestStopDemo}
+                disabled={data.busy}
+                accessibilityRole="button"
+                accessibilityLabel="デモを終了"
+                accessibilityState={{ disabled: data.busy }}
+                style={(state) => [styles.demoExitHit, data.busy && { opacity: 0.5 }, (state as { focused?: boolean }).focused && focusRingOnDark]}
+              >
+                <View style={styles.demoExitPill}>
+                  <Text style={styles.demoExit}>終了</Text>
+                </View>
+              </Pressable>
+            </View>
+          ) : null}
+          <View style={styles.fill} onLayout={(event) => setRegionTop(event.nativeEvent.layout.y)}>
+            <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+              <ScrollView
+                ref={scrollRef}
+                style={styles.scroll}
+                contentContainerStyle={[
+                  styles.content,
+                  { paddingTop: header ? headerHeight : 0, paddingBottom: bottomReserve },
+                ]}
+                scrollIndicatorInsets={{ top: header ? headerHeight : 0, bottom: showTabs ? bottomReserve - 24 : 0 }}
+                keyboardShouldPersistTaps="handled"
+              >
+                <EnterView key={bodyKey} {...enter}>
+                  {fullBleed ? body : <Screen>{body}</Screen>}
+                </EnterView>
+              </ScrollView>
+            </KeyboardAvoidingView>
+          </View>
         </View>
-      ) : null}
+      </BlurTarget>
+      {showTabs ? <TabBar tabs={TABS} selected={tab} onSelect={setTab} disabled={data.busy} onHeight={setNavHeight} /> : null}
       <Dialog
         visible={exitDemoOpen}
         title="編集中の内容を破棄してデモを終了しますか"
@@ -332,35 +374,21 @@ function AppShell() {
       >
         デモで入力中の内容は保存されていません。終了すると破棄され、あなたのデータの画面へ戻ります。
       </Dialog>
-      {header}
-      <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView
-          ref={scrollRef}
-          style={styles.scroll}
-          contentContainerStyle={[
-            styles.content,
-            { paddingBottom: showTabs ? navReserve(insets.bottom) : insets.bottom + space.xxl + space.sm },
-          ]}
-          keyboardShouldPersistTaps="handled"
-        >
-          {blueTop ? <View style={styles.overscroll} /> : null}
-          <EnterView key={bodyKey} {...enter}>
-            {fullBleed ? body : <Screen>{body}</Screen>}
-          </EnterView>
-        </ScrollView>
-      </KeyboardAvoidingView>
-      {showTabs ? <TabBar tabs={TABS} selected={tab} onSelect={setTab} disabled={data.busy} /> : null}
     </View>
   );
 }
 
+// layout 前の見込み（ヘッダー: 上下8＋高さ52、Web帯: 最小36）
+const HEADER_ESTIMATE = 68;
+const WEB_BAR_ESTIMATE = 36;
+
 const styles = StyleSheet.create({
-  root: { flex: 1 },
+  root: { flex: 1, backgroundColor: colors.sceneTop },
   fill: { flex: 1 },
-  scroll: { backgroundColor: colors.canvas },
+  // 本文は Scene の上を透明にスクロールする
+  scroll: { backgroundColor: 'transparent' },
   content: { flexGrow: 1 },
-  // iOSで上に引っ張った時に、ステージの上が背景色で抜けないようにする
-  overscroll: { position: 'absolute', left: 0, right: 0, top: -600, height: 600, backgroundColor: colors.primaryDeep },
+  headerLayer: { position: 'absolute', left: 0, right: 0, zIndex: 2 },
   webBar: {
     flexDirection: 'row',
     alignItems: 'center',

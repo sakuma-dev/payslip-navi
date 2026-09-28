@@ -4,14 +4,15 @@ import type { Payslip } from '../../domain';
 import { comparePayslips, formatYen } from '../../domain';
 import { isNativeOcrAvailable } from '../../services';
 import { ComparisonCard, InsightCard } from '../ComparisonView';
-import { Button, Card, DeltaChip, Divider, MonthBadge, Row, SectionTitle, SplitBar, StatTiles, YenText } from '../components';
+import { Badge, Button, Card, DeltaChip, Divider, MonthBadge, Row, SectionTitle, SplitBar, StatTiles, YenText } from '../components';
 import { changeWord, monthLabel, monthYear, shiftMonth, signedSpeech, signedYen, yenSpeech } from '../format';
 import { Icon } from '../icons';
+import { useGlass, useSurfaceStyle } from '../glass';
+import { Hero } from '../Hero';
 import { EnterView, Screen, useLayoutMetrics } from '../layout';
 import { stagger } from '../motion';
-import { Stage, STAGE_OVERLAP } from '../Stage';
 import { TrendChart } from '../TrendChart';
-import { colors, fontBase, radius, shadow, space, type } from '../theme';
+import { colors, fontBase, radius, space, type } from '../theme';
 import { deltaEmphasis, displayStep, splitBarModel } from '../visual';
 
 export function HomeScreen({ records, onAdd, onOpen, demo }: {
@@ -29,24 +30,24 @@ export function HomeScreen({ records, onAdd, onOpen, demo }: {
     [records],
   );
 
-  const wide = metrics.sizeClass === 'wide';
-  const wrap = (stage: React.ReactNode, rest: React.ReactNode) => (wide
-    ? <Screen>{stage}{rest}</Screen>
-    : <View>{stage}<Screen>{rest}</Screen></View>);
+  const sheetSurface = useSurfaceStyle('raised');
+  const glass = useGlass();
+  // ヒーローは面を持たず Scene の上に直接置くので、どの幅でも本文と同じ列に並べる。
+  const wrap = (hero: React.ReactNode, rest: React.ReactNode) => <Screen>{hero}{rest}</Screen>;
 
   if (!latest || !comparison) {
     return wrap(
-      <Stage variant={wide ? 'card' : 'bleed'}>
-        <StageTopRow />
-        <View style={styles.emptyMark}>
-          <Icon name="document" size={32} color={colors.onPrimary} strokeWidth={1.5} />
+      <Hero>
+        <HeroTopRow />
+        <View style={[styles.emptyMark, glass.opaqueSurfaces ? styles.emptyMarkOpaque : styles.emptyMarkGlass]}>
+          <Icon name="document" size={32} color={colors.primaryDeep} strokeWidth={1.5} />
         </View>
         <Text style={styles.emptyTitle} accessibilityRole="header">まだ明細がありません</Text>
         <Text style={styles.stageBody}>
           写真・テキスト・手入力から、1か月分の明細を登録できます。数字はあなたが確認してから保存します。
         </Text>
-        <Button label="明細を追加する" variant="inverse" icon="plus" onPress={onAdd} style={{ marginTop: space.xl }} />
-      </Stage>,
+        <Button label="明細を追加する" icon="plus" onPress={onAdd} style={{ marginTop: space.xl }} />
+      </Hero>,
       <Card style={{ marginTop: space.xl }} title="追加できる方法">
         <MethodLine text={isNativeOcrAvailable ? '紙の明細を撮影、または保存した写真から読み取る' : '撮影・写真からの読み取り（開発ビルドで利用できます）'} />
         <MethodLine text="Web明細などからコピーしたテキストを貼り付ける" />
@@ -62,23 +63,22 @@ export function HomeScreen({ records, onAdd, onOpen, demo }: {
   const monthDiff = comparison.monthDifference;
   const yearDiff = comparison.yearDifference;
 
-  const stageInner = wide ? metrics.contentWidth - 40 : metrics.contentWidth;
-  const displaySize = displayStep(formatYen(latest.netPay), stageInner, metrics.fontScale);
-  const sheetInset = wide ? space.md : 0;
-  const sheetInner = metrics.contentWidth - sheetInset * 2 - metrics.sheetPadding * 2;
+  const displaySize = displayStep(formatYen(latest.netPay), metrics.contentWidth, metrics.fontScale);
+  // シートの内幅（縁1pxを含めて差し引く）
+  const sheetInner = metrics.contentWidth - metrics.sheetPadding * 2 - 2;
   const split = splitBarModel(latest);
 
   return wrap(
-    <Stage variant={wide ? 'card' : 'bleed'} overlap>
-      <StageTopRow onAdd={onAdd} />
+    <Hero>
+      <HeroTopRow onAdd={onAdd} />
       <View style={styles.monthRow}>
-        <Text style={styles.stageLabel}>{monthLabel(latest.month)}の手取り</Text>
-        {demo ? <Text style={styles.demoTag}>架空データ</Text> : null}
+        <Text style={styles.heroLabel}>{monthLabel(latest.month)}の手取り</Text>
+        {demo ? <Badge label="架空データ" tone="demo" /> : null}
       </View>
       <YenText
         value={latest.netPay}
         size={displaySize}
-        color={colors.onPrimary}
+        color={colors.ink}
         maxScale={1.3}
         accessibilityLabel={`手取り ${yenSpeech(latest.netPay)}`}
       />
@@ -86,8 +86,8 @@ export function HomeScreen({ records, onAdd, onOpen, demo }: {
         {/* 比較先は見える文字として読ませる（チップ側では繰り返さない） */}
         {monthDiff ? (
           <>
-            <DeltaChip value={monthDiff.netPay} emphasis={deltaEmphasis('netPay')} onStage />
-            <Text style={styles.stageCaption}>前月{prevMonth ? `（${monthLabel(prevMonth)}）` : ''}比</Text>
+            <DeltaChip value={monthDiff.netPay} emphasis={deltaEmphasis('netPay')} />
+            <Text style={styles.heroCaption}>前月{prevMonth ? `（${monthLabel(prevMonth)}）` : ''}比</Text>
           </>
         ) : (
           <View style={styles.noDataChip}>
@@ -99,14 +99,14 @@ export function HomeScreen({ records, onAdd, onOpen, demo }: {
       </View>
       {/* 前年同月はデータがある時だけ。無い時は比較カードの「前年同月」で「データなし」と示す。 */}
       {yearDiff ? (
-        <Text style={[styles.stageCaption, { marginTop: space.sm }]}>
+        <Text style={[styles.heroCaption, { marginTop: space.sm }]}>
           前年同月{prevYear ? `（${monthLabel(prevYear)}）` : ''}比 {signedYen(yearDiff.netPay)} {changeWord(yearDiff.netPay)}
         </Text>
       ) : null}
-    </Stage>,
+    </Hero>,
     <>
       {/* 内訳シート（主な情報なので入場の動きを付けない）。値は各1回: 総支給は見出し、手取り・控除合計は帯の凡例を兼ねるタイル。 */}
-      <View style={[styles.sheet, shadow.sheet, { padding: metrics.sheetPadding, marginHorizontal: sheetInset }]}>
+      <View style={[styles.sheet, sheetSurface, { padding: metrics.sheetPadding }]}>
         <View style={styles.sheetHead}>
           <Text style={type.headline} accessibilityRole="header">内訳</Text>
           {split.visible ? (
@@ -186,7 +186,7 @@ export function HomeScreen({ records, onAdd, onOpen, demo }: {
   );
 }
 
-function StageTopRow({ onAdd }: { onAdd?: () => void }) {
+function HeroTopRow({ onAdd }: { onAdd?: () => void }) {
   return (
     <View style={styles.topRow}>
       <Text style={styles.appName} accessibilityRole="header">給与明細ナビ</Text>
@@ -195,7 +195,7 @@ function StageTopRow({ onAdd }: { onAdd?: () => void }) {
           label="追加"
           accessibilityLabel="明細を追加する"
           icon="plus"
-          variant="inverse"
+          variant="glass"
           compact
           onPress={onAdd}
         />
@@ -215,47 +215,39 @@ function MethodLine({ text }: { text: string }) {
 
 const styles = StyleSheet.create({
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44, marginBottom: space.sm },
-  appName: { ...fontBase, color: colors.onPrimaryMuted, fontSize: 14, fontWeight: '700', letterSpacing: 0.5 },
+  // Scene の上の文字は ink / inkMuted / primaryDeep だけ（docs/UI-GLASS-DESIGN.md §2.1）
+  appName: { ...fontBase, color: colors.inkMuted, fontSize: 14, fontWeight: '700', letterSpacing: 0.5 },
   monthRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.sm, marginBottom: space.xs },
-  stageLabel: { ...fontBase, color: colors.onPrimaryMuted, fontSize: 15, lineHeight: 21, fontWeight: '600' },
-  demoTag: {
-    ...fontBase,
-    color: colors.onPrimary,
-    fontSize: 12,
-    fontWeight: '700',
-    borderWidth: 1,
-    borderColor: colors.onPrimaryMuted,
-    borderRadius: radius.pill,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
+  heroLabel: { ...fontBase, color: colors.inkMuted, fontSize: 15, lineHeight: 21, fontWeight: '600' },
   deltaRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.sm, marginTop: space.md },
-  stageCaption: { ...fontBase, color: colors.onPrimaryMuted, fontSize: 13, lineHeight: 18, fontWeight: '600' },
+  heroCaption: { ...fontBase, color: colors.inkMuted, fontSize: 13, lineHeight: 18, fontWeight: '600' },
   noDataChip: {
     minHeight: 28,
     justifyContent: 'center',
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: radius.pill,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.neutralDeltaSoft,
   },
-  stageBody: { ...fontBase, color: colors.onPrimaryMuted, fontSize: 15, lineHeight: 23, marginTop: space.sm },
+  stageBody: { ...fontBase, color: colors.inkMuted, fontSize: 15, lineHeight: 23, marginTop: space.sm },
   emptyMark: {
     width: 64,
     height: 64,
     borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: space.md,
     marginBottom: space.lg,
   },
-  emptyTitle: { ...fontBase, color: colors.onPrimary, fontSize: 22, lineHeight: 28, fontWeight: '800' },
-  sheet: {
-    marginTop: -STAGE_OVERLAP,
-    backgroundColor: colors.surface,
-    borderRadius: radius.xl,
+  emptyMarkGlass: {
+    backgroundColor: colors.glassButton,
+    borderColor: colors.glassEdge,
+    boxShadow: '0 10px 28px rgba(31,53,99,0.08), inset 0 1px 0 rgba(255,255,255,0.9)',
   },
+  emptyMarkOpaque: { backgroundColor: colors.surface, borderColor: colors.lineStrong },
+  emptyTitle: { ...fontBase, color: colors.ink, fontSize: 22, lineHeight: 28, fontWeight: '800' },
+  sheet: { borderRadius: radius.xl },
   sheetHead: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', columnGap: space.sm, rowGap: space.xxs, marginBottom: space.md },
   grossNote: { marginLeft: 'auto', textAlign: 'right' },
   grossValue: { ...fontBase, color: colors.ink, fontSize: 15, fontWeight: '700', fontVariant: ['tabular-nums'] },

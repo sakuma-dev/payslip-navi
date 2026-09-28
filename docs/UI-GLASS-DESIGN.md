@@ -83,7 +83,7 @@
   - AppRootで1つだけ置く。capabilityを検出し、`useReducer(prefsReducer)` で状態を持ち、`targetRef`・`targetReady` を管理する。
   - `useGlass()`・`BlurTarget`・`GlassSurface`・`Scene` を公開する。
 - **`platform.{ios,android,web}.tsx`＋既定の `platform.tsx`**（vitest と tsc は既定だけを解決する）。同じAPIを持つ。
-  - API: `detectCapability()`、`subscribePreferences(dispatch) → cleanup`、`NativeGlass`、`BlurBackdrop({targetRef})`、`BlurTargetView`、`needsTarget`。
+  - API: `detectCapability()`、`subscribePreferences(dispatch) → cleanup`、`NativeGlass`、`BlurBackdrop({targetRef})`、`blurContainerStyle`、`BlurTargetView`、`needsTarget`。
   - **iOS**
     - capability: `expo-glass-effect` と `expo-blur` は遅延 `require` で読み込み、try/catch で囲む（D-L3。dev client が未再ビルドでも import で落ちない）。`isGlassEffectAPIAvailable() && isLiquidGlassAvailable()` なら native、読めるが条件を満たさなければ blur、読めなければ none。
     - 設定: ReduceTransparency と DarkerSystemColors を購読する。forcedColors は unsupported。
@@ -94,7 +94,7 @@
   - **Web**
     - capability: `CSS.supports` で `backdrop-filter`／`-webkit-` のどちらかが通れば blur。
     - 設定: `matchMedia` の `(prefers-reduced-transparency: reduce)`・`(prefers-contrast: more)`・`(forced-colors: active)`。`media==='not all'` なら unsupported。
-    - 描画: backdrop は自前の View に `backdropFilter: blur(24px) saturate(160%)` を当てる（expo-blur Web は背景色を上書きするので使わない）。DOM と CSS の型はこのファイルの外へ出さない。
+    - 描画: クリップする内側の層そのものに `backdropFilter: blur(24px) saturate(160%)` を当てる（`blurContainerStyle`）。expo-blur Web は背景色を上書きするので使わない。DOM と CSS の型はこのファイルの外へ出さない。
   - **既定（`platform.tsx`）:** none。すべて unsupported。
 - **`GlassSurface({ role: 'nav'|'header', radius, style, contentStyle, onLayout })`**
   - 外側の層は影と半径だけで、overflow は visible。内側の層は `overflow:hidden`、半径、縁1px。
@@ -157,7 +157,7 @@
 
 ## 6. 設定の初期値・途中の変更・cleanup
 
-- capability と3つの設定は unknown から始め、その間は solid と不透明な面で表示する。解決したらアニメーションなしで差し替える。
+- capability は最初の描画時に同期で1回だけ検出する（例外なら none）。3つの設定は unknown から始め、その間はどの capability でも solid と不透明な面で表示する。解決したらアニメーションなしで差し替える。
 - 購読は `subscribePreferences` の中で、先に listener を登録してから問い合わせる。`active` フラグを持ち、cleanup の後は dispatch しない。cleanup で `remove()`（Web は `removeEventListener`）を呼ぶ。
 - 途中で設定が変わったら、mode を即座に置き換える。高コントラストでは Scene の塊と光沢を消し、sceneTop 一色にする。透明度低減だけの時は塊を残す（装飾で、透過ではないため）。
 

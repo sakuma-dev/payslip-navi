@@ -1,62 +1,21 @@
 import { Platform, TextStyle, ViewStyle } from 'react-native';
+import { palette } from './glass/palette';
 
-// 色の意味とコントラストは docs/UI-REFRESH-DESIGN.md §2.1 / §14。文字色に opacity を足してコントラストを下げない。
-export const colors = {
-  canvas: '#EEF2F8',
-  surface: '#FFFFFF',
-  surfaceSunken: '#F3F6FB',
-  // 装飾の罫線だけ。意味を持つ境界は lineStrong（白上3:1以上）。
-  line: '#E1E7F0',
-  lineStrong: '#7B8598',
-  ink: '#16213A',
-  inkMuted: '#56627A',
-  inkSubtle: '#606B82',
-  // 装飾だけ（文字・意味のある図形には使わない）
-  inkFaint: '#A3ADC0',
-  primary: '#2458D0',
-  primaryDeep: '#15398F',
-  primarySoft: '#E6EDFC',
-  onPrimary: '#FFFFFF',
-  onPrimaryMuted: '#E3EBFF',
-  stageGlow: '#3E74F0',
-  up: '#0F7A5C',
-  upSoft: '#E3F4EE',
-  down: '#B0441A',
-  downSoft: '#FCEEE7',
-  neutralDelta: '#3E4A63',
-  neutralDeltaSoft: '#EDF0F5',
-  warning: '#835300',
-  warningSoft: '#FFF3D1',
-  danger: '#B42332',
-  dangerSoft: '#FCE8EA',
-  demo: '#6B4FBB',
-  demoSoft: '#EFEBFA',
-  catEarning: '#2458D0',
-  catDeduction: '#7A8AA6',
-  catAdjustment: '#1D8391',
-  barMuted: '#6690E6',
-  barStrong: '#15398F',
-  navInk: '#16213A',
-  navInactive: '#AEB9D0',
-  scrim: 'rgba(22,33,58,0.48)',
-
-  // 既存画面が参照している名前（新しい値へ対応付け）
-  background: '#EEF2F8',
-  surfaceMuted: '#F3F6FB',
-  earning: '#2458D0',
-  deduction: '#7A8AA6',
-  adjustment: '#1D8391',
-  bar: '#6690E6',
-} as const;
+// 色の正本は glass/palette.ts（意味とコントラストは docs/UI-GLASS-DESIGN.md §2）。
+export const colors = palette;
 
 export const space = { xxs: 2, xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 28, xxxl: 40 } as const;
 
-export const radius = { xs: 4, sm: 10, md: 14, lg: 20, xl: 28, pill: 999 } as const;
+export const radius = { xs: 4, sm: 10, md: 14, lg: 20, card: 24, xl: 28, header: 26, nav: 32, pill: 999 } as const;
 
 export const shadow = {
-  card: { boxShadow: '0 4px 16px rgba(22,33,58,0.06)' } as ViewStyle,
-  sheet: { boxShadow: '0 -2px 12px rgba(21,57,143,0.10), 0 6px 18px rgba(22,33,58,0.06)' } as ViewStyle,
-  nav: { boxShadow: '0 8px 24px rgba(22,33,58,0.22)' } as ViewStyle,
+  card: { boxShadow: '0 10px 28px rgba(31,53,99,0.08), 0 1px 2px rgba(31,53,99,0.05)' } as ViewStyle,
+  // 浮遊する機能層（native Liquid Glass では付けない。システムの影を使う）
+  glass: { boxShadow: '0 12px 32px rgba(31,53,99,0.16), 0 2px 6px rgba(31,53,99,0.08)' } as ViewStyle,
+  // 上端の光。クリップする内側の層にだけ付ける
+  highlight: { boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9)' } as ViewStyle,
+  capsule: { boxShadow: '0 2px 8px rgba(31,53,99,0.14)' } as ViewStyle,
+  buttonPrimary: { boxShadow: '0 6px 16px rgba(36,88,208,0.28), inset 0 1px 0 rgba(255,255,255,0.28)' } as ViewStyle,
   dialog: { boxShadow: '0 12px 32px rgba(22,33,58,0.18)' } as ViewStyle,
 } as const;
 
@@ -100,6 +59,22 @@ export const categoryColor = {
 // 押下領域の実寸（Webでも hitSlop に頼らない）
 export const TOUCH = 44;
 
-// Webのキーボードフォーカス表示
-export const focusRing: ViewStyle = { boxShadow: '0 0 0 3px rgba(36,88,208,0.45)' };
-export const focusRingOnDark: ViewStyle = { boxShadow: '0 0 0 2px #FFFFFF' };
+// キーボードフォーカス表示。outline を主にするので、forced-colors で影が消えても残る（D-M3）。
+// 外側に primaryDeep の線、内側に白い縁（暗い面・明るい面のどちらでも見える）。
+export const focusRing: ViewStyle = {
+  outlineWidth: 2,
+  outlineStyle: 'solid',
+  outlineColor: palette.primaryDeep,
+  outlineOffset: 2,
+  boxShadow: '0 0 0 2px #FFFFFF',
+};
+// クリップされる層（ナビ・ヘッダー）の内側で使う。
+export const focusRingInset: ViewStyle = {
+  outlineWidth: 2,
+  outlineStyle: 'solid',
+  outlineColor: palette.primaryDeep,
+  outlineOffset: -2,
+  boxShadow: 'inset 0 0 0 4px #FFFFFF',
+};
+// デモ帯（濃い紫）の上だけ
+export const focusRingOnDark: ViewStyle = { outlineWidth: 2, outlineStyle: 'solid', outlineColor: '#FFFFFF', outlineOffset: 2 };

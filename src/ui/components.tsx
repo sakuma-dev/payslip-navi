@@ -22,10 +22,11 @@ import { formatYen } from '../domain';
 import { changeWord, signedSpeech, signedYen, yenSpeech } from './format';
 import { Icon, IconName } from './icons';
 import { useInsets } from './insets';
-import { EnterView } from './layout';
+import { EnterView, useLayoutMetrics } from './layout';
 import { duration, useEnterAnimation, usePressScale, useSlidingIndicator, useToggleProgress } from './motion';
-import { colors, focusRing, focusRingOnDark, fontBase, radius, shadow, space, TOUCH, type } from './theme';
-import { DeltaEmphasis, SplitBarModel, splitYen, tileColumns } from './visual';
+import { GlassSurface, useGlass, useSurfaceStyle } from './glass';
+import { colors, focusRing, focusRingInset, fontBase, radius, shadow, space, TOUCH, type } from './theme';
+import { CONTENT_MAX_WIDTH, DeltaEmphasis, SplitBarModel, splitYen, tileColumns } from './visual';
 
 type PressState = PressableStateCallbackType & { focused?: boolean; hovered?: boolean };
 
@@ -43,11 +44,13 @@ export function Card({ children, style, tone, dense, title, action }: {
   title?: string;
   action?: ReactNode;
 }) {
+  // 情報面はぼかさない（白90%。透明度低減・高コントラストでは不透明な白と意味のある境界）
+  const surface = useSurfaceStyle('card');
   return (
     <View
       style={[
         styles.card,
-        tone !== 'soft' && tone !== 'demo' && shadow.card,
+        tone !== 'soft' && tone !== 'demo' && surface,
         dense && { padding: space.lg },
         tone === 'soft' && { backgroundColor: colors.primarySoft, borderColor: colors.primarySoft },
         tone === 'demo' && { backgroundColor: colors.demoSoft, borderColor: colors.demoSoft },
@@ -88,14 +91,15 @@ export function LargeTitle({ title, subtitle }: { title: string; subtitle?: stri
 
 // ─── 操作 ───────────────────────────────────────────────
 
-type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'inverse';
+// glass: Scene の上に置く静的なガラス風の面（実素材ではない）。操作は文字ラベルで識別する（D-M2）。
+type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'glass';
 
 const BUTTON_PALETTE: Record<ButtonVariant, { bg: string; fg: string; border: string; pressedBg: string }> = {
   primary: { bg: colors.primary, fg: colors.onPrimary, border: colors.primary, pressedBg: colors.primaryDeep },
   secondary: { bg: colors.primarySoft, fg: colors.primary, border: colors.primarySoft, pressedBg: '#D5E1FA' },
   danger: { bg: colors.dangerSoft, fg: colors.danger, border: colors.danger, pressedBg: '#F8D6DA' },
   ghost: { bg: 'transparent', fg: colors.primary, border: 'transparent', pressedBg: colors.primarySoft },
-  inverse: { bg: colors.surface, fg: colors.primaryDeep, border: colors.surface, pressedBg: colors.primarySoft },
+  glass: { bg: colors.glassButton, fg: colors.primaryDeep, border: colors.glassEdge, pressedBg: colors.primarySoft },
 };
 
 export function Button({ label, onPress, variant = 'primary', disabled, busy, hint, style, compact, icon, accessibilityLabel }: {
@@ -111,7 +115,10 @@ export function Button({ label, onPress, variant = 'primary', disabled, busy, hi
   accessibilityLabel?: string;
 }) {
   const inactive = disabled || busy;
-  const palette = BUTTON_PALETTE[variant];
+  const glass = useGlass();
+  const base = BUTTON_PALETTE[variant];
+  // 不透明・高コントラストでは glass ボタンも白地＋lineStrong の境界にする
+  const palette = variant === 'glass' && glass.opaqueSurfaces ? { ...base, bg: colors.surface, border: colors.lineStrong } : base;
   const press = usePressScale(0.97);
   return (
     <Pressable
@@ -123,7 +130,7 @@ export function Button({ label, onPress, variant = 'primary', disabled, busy, hi
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityHint={hint}
       accessibilityState={{ disabled: !!inactive, busy: !!busy }}
-      style={(state) => [styles.buttonHit, style, isFocused(state) && (variant === 'inverse' ? focusRingOnDark : focusRing)]}
+      style={(state) => [styles.buttonHit, style, isFocused(state) && focusRing]}
     >
       {({ pressed }) => (
         <Animated.View
@@ -131,6 +138,8 @@ export function Button({ label, onPress, variant = 'primary', disabled, busy, hi
             styles.button,
             compact && styles.buttonCompact,
             { backgroundColor: palette.bg, borderColor: palette.border },
+            variant === 'primary' && !inactive && !glass.highContrast && shadow.buttonPrimary,
+            variant === 'glass' && !glass.highContrast && shadow.card,
             pressed && !inactive && press.reduced && { backgroundColor: palette.pressedBg },
             inactive && styles.buttonDisabled,
             press.style,
@@ -146,12 +155,11 @@ export function Button({ label, onPress, variant = 'primary', disabled, busy, hi
   );
 }
 
-export function IconButton({ icon, onPress, accessibilityLabel, disabled, onStage, size = 44, hint }: {
+export function IconButton({ icon, onPress, accessibilityLabel, disabled, size = 44, hint }: {
   icon: IconName;
   onPress: () => void;
   accessibilityLabel: string;
   disabled?: boolean;
-  onStage?: boolean;
   // 見た目の円の直径。押下領域は常に44以上。
   size?: number;
   hint?: string;
@@ -167,20 +175,20 @@ export function IconButton({ icon, onPress, accessibilityLabel, disabled, onStag
       accessibilityLabel={accessibilityLabel}
       accessibilityHint={hint}
       accessibilityState={{ disabled: !!disabled }}
-      style={(state) => [styles.iconHit, isFocused(state) && (onStage ? focusRingOnDark : focusRing)]}
+      style={(state) => [styles.iconHit, isFocused(state) && focusRing]}
     >
       {({ pressed }) => (
         <Animated.View
           style={[
             styles.iconFace,
             { width: size, height: size },
-            onStage ? styles.iconFaceStage : styles.iconFaceDefault,
-            pressed && press.reduced && { backgroundColor: onStage ? 'rgba(255,255,255,0.28)' : colors.primarySoft },
+            styles.iconFaceDefault,
+            pressed && press.reduced && { backgroundColor: colors.primarySoft },
             disabled && { opacity: 0.35 },
             press.style,
           ]}
         >
-          <Icon name={icon} size={20} color={onStage ? colors.onPrimary : colors.primary} />
+          <Icon name={icon} size={20} color={colors.primary} />
         </Animated.View>
       )}
     </Pressable>
@@ -265,11 +273,10 @@ const DELTA_TONE = {
 };
 
 // 増減は矢印・符号・金額・「増/減/変化なし」の文字で伝える。色は方向だけで、控除/調整は中立。
-export function DeltaChip({ value, suffix, emphasis = 'direction', onStage }: {
+export function DeltaChip({ value, suffix, emphasis = 'direction' }: {
   value: number;
   suffix?: string;
   emphasis?: DeltaEmphasis;
-  onStage?: boolean;
 }) {
   const tone = value === 0 || emphasis === 'neutral' ? DELTA_TONE.neutral : value > 0 ? DELTA_TONE.up : DELTA_TONE.down;
   const icon: IconName = value > 0 ? 'arrowUpRight' : value < 0 ? 'arrowDownRight' : 'minus';
@@ -279,7 +286,7 @@ export function DeltaChip({ value, suffix, emphasis = 'direction', onStage }: {
     <View
       accessible={!IS_WEB}
       accessibilityLabel={IS_WEB ? undefined : `${signedSpeech(value)}${suffix ?? ''}`}
-      style={[styles.chip, { backgroundColor: onStage ? colors.surface : tone.bg }]}
+      style={[styles.chip, { backgroundColor: tone.bg }]}
     >
       <Icon name={icon} size={16} color={tone.fg} strokeWidth={2} />
       <Text style={[type.moneyS, { color: tone.fg, flexShrink: 1 }]} maxFontSizeMultiplier={1.6}>
@@ -322,9 +329,10 @@ export function StatTiles({ items, width, spacing }: {
               <View
                 style={[
                   styles.legendSwatch,
+                  // 塗りと同じ色の縁も持たせ、forced-colors で塗りが消えても見本が残るようにする
                   item.value === 0
                     ? { borderWidth: 1.5, borderColor: item.color, backgroundColor: colors.surface }
-                    : { backgroundColor: item.color },
+                    : { borderWidth: 1, borderColor: item.color, backgroundColor: item.color },
                 ]}
               />
             ) : (
@@ -346,17 +354,16 @@ export function SplitBar({ model }: { model: Extract<SplitBarModel, { visible: t
   const label = `総支給${yenSpeech(model.grossPay)}のうち、手取り${yenSpeech(model.netPay)}、控除合計${yenSpeech(model.totalDeductions)}`;
   return (
     <View style={[styles.splitBar, model.gap && { gap: 2 }]} accessible accessibilityRole="image" accessibilityLabel={label}>
-      {model.segments.map((segment) => (
-        <View
-          key={segment.kind}
-          style={{
-            flexGrow: segment.weight,
-            flexShrink: 1,
-            flexBasis: 0,
-            backgroundColor: segment.kind === 'net' ? colors.primary : colors.catDeduction,
-          }}
-        />
-      ))}
+      {model.segments.map((segment) => {
+        const fill = segment.kind === 'net' ? colors.primary : colors.catDeduction;
+        // 同じ色の縁は forced-colors で塗りが消えても区画を残すため
+        return (
+          <View
+            key={segment.kind}
+            style={{ flexGrow: segment.weight, flexShrink: 1, flexBasis: 0, backgroundColor: fill, borderWidth: 1, borderColor: fill }}
+          />
+        );
+      })}
     </View>
   );
 }
@@ -375,7 +382,7 @@ export function Segmented<K extends string>({ options, value, onChange, accessib
       {indicator.ready ? (
         <Animated.View
           pointerEvents="none"
-          style={[styles.segmentCapsule, { width: indicator.width, transform: [{ translateX: indicator.translateX }] }]}
+          style={[styles.segmentCapsule, shadow.capsule, { width: indicator.width, transform: [{ translateX: indicator.translateX }] }]}
         />
       ) : null}
       {options.map((option, index) => {
@@ -660,6 +667,8 @@ function DialogBody({ title, titleId, openerRef, children, actions, placement }:
 
 // ─── 画面の見出し ───────────────────────────────────────────────
 
+// スタック画面の浮遊ヘッダー（機能層のガラス。docs/UI-GLASS-DESIGN.md §5）。本文はこの下へスクロールで回り込む。
+// ガラスの上の文字は ink（タイトル）と primaryDeep（戻る）だけ。押下は子のピルの色で示す（面全体は反応させない）。
 export function ScreenHeader({ title, onBack, backLabel = '戻る', backIcon = 'chevronLeft', right }: {
   title: string;
   onBack?: () => void;
@@ -667,27 +676,36 @@ export function ScreenHeader({ title, onBack, backLabel = '戻る', backIcon = '
   backIcon?: IconName;
   right?: ReactNode;
 }) {
+  const { gutter } = useLayoutMetrics();
+  const glass = useGlass();
+  const pill = glass.opaqueSurfaces
+    ? { backgroundColor: colors.surface, borderColor: colors.lineStrong }
+    : { backgroundColor: colors.backPill, borderColor: colors.glassEdge };
   return (
-    <View style={styles.header}>
-      <View style={styles.headerSide}>
-        {onBack ? (
-          <Pressable
-            onPress={onBack}
-            accessibilityRole="button"
-            accessibilityLabel={backLabel}
-            style={(state) => [styles.backHit, isFocused(state) && focusRing]}
-          >
-            {({ pressed }) => (
-              <View style={[styles.backPill, pressed && { backgroundColor: colors.primarySoft }]}>
-                <Icon name={backIcon} size={18} color={colors.primary} strokeWidth={2} />
-                <Text style={styles.backText}>{backLabel}</Text>
-              </View>
-            )}
-          </Pressable>
-        ) : null}
-      </View>
-      <Text style={styles.headerTitle} numberOfLines={1} accessibilityRole="header">{title}</Text>
-      <View style={[styles.headerSide, { alignItems: 'flex-end' }]}>{right}</View>
+    <View style={[styles.headerFrame, { paddingHorizontal: gutter }]} pointerEvents="box-none">
+      <GlassSurface radius={radius.header} style={styles.headerBar}>
+        <View style={styles.header}>
+          <View style={styles.headerSide}>
+            {onBack ? (
+              <Pressable
+                onPress={onBack}
+                accessibilityRole="button"
+                accessibilityLabel={backLabel}
+                style={(state) => [styles.backHit, isFocused(state) && focusRingInset]}
+              >
+                {({ pressed }) => (
+                  <View style={[styles.backPill, pill, pressed && { backgroundColor: colors.backPillPressed }]}>
+                    <Icon name={backIcon} size={18} color={colors.primaryDeep} strokeWidth={2} />
+                    <Text style={styles.backText}>{backLabel}</Text>
+                  </View>
+                )}
+              </Pressable>
+            ) : null}
+          </View>
+          <Text style={styles.headerTitle} numberOfLines={1} accessibilityRole="header">{title}</Text>
+          <View style={[styles.headerSide, { alignItems: 'flex-end' }]}>{right}</View>
+        </View>
+      </GlassSurface>
     </View>
   );
 }
@@ -721,7 +739,7 @@ const styles = StyleSheet.create({
   tabular: { fontVariant: ['tabular-nums'] },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    borderRadius: radius.card,
     borderWidth: 1,
     borderColor: colors.line,
     padding: space.xl,
@@ -750,7 +768,6 @@ const styles = StyleSheet.create({
   iconHit: { minWidth: TOUCH, minHeight: TOUCH, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill },
   iconFace: { borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
   iconFaceDefault: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
-  iconFaceStage: { backgroundColor: 'rgba(255,255,255,0.16)' },
   banner: {
     flexDirection: 'row',
     gap: space.md,
@@ -784,7 +801,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 2,
     borderRadius: radius.pill,
-    backgroundColor: colors.surfaceSunken,
+    backgroundColor: colors.controlTrack,
+    boxShadow: 'inset 0 1px 2px rgba(22,33,58,0.08)',
   },
   segment: {
     flex: 1,
@@ -910,7 +928,9 @@ const styles = StyleSheet.create({
   // 見出しはスクリプトでだけフォーカスする非操作要素なので、フォーカス枠を描かない
   dialogTitle: { marginBottom: space.md, borderRadius: radius.sm, outlineWidth: 0 },
   dialogActions: { marginTop: space.xl, gap: space.sm },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.md, minHeight: 56, backgroundColor: colors.canvas },
+  headerFrame: { paddingVertical: space.sm },
+  headerBar: { width: '100%', maxWidth: CONTENT_MAX_WIDTH, alignSelf: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.xs, minHeight: 50 },
   headerSide: { width: 104 },
   backHit: { minHeight: TOUCH, minWidth: TOUCH, justifyContent: 'center', alignSelf: 'flex-start', borderRadius: radius.pill },
   backPill: {
@@ -921,11 +941,9 @@ const styles = StyleSheet.create({
     paddingLeft: 8,
     paddingRight: 14,
     borderRadius: radius.pill,
-    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.line,
   },
-  backText: { ...fontBase, color: colors.primary, fontSize: 15, fontWeight: '700' },
+  backText: { ...fontBase, color: colors.primaryDeep, fontSize: 15, fontWeight: '700' },
   headerTitle: { ...fontBase, flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '700', color: colors.ink },
   empty: { alignItems: 'center', paddingVertical: space.xxl, paddingHorizontal: space.lg },
   emptyMark: {
