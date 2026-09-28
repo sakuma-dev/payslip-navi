@@ -180,21 +180,32 @@ describe('comparableItemChanges', () => {
     { label: '住民税', category: 'deduction' as const, amount: 500, change: 'changed' as const },
   ];
 
-  it('比較月の支給内訳が未登録なら、支給の項目差を「追加」と見せずに未登録として分ける', () => {
+  it('比較月に支給の項目が無ければ、支給の項目差を「今月のみ」と見せずに比較から外す', () => {
     const result = comparableItemChanges(diffItems, { items: [item('earning'), item('deduction')] }, { items: [item('deduction')] });
-    expect(result.unregistered).toEqual(['earning']);
+    expect(result.notCompared).toEqual(['earning']);
     expect(result.items.map((i) => i.label)).toEqual(['住民税']);
+    expect(result.unchanged).toEqual([]);
   });
 
-  it('両月とも内訳があれば全件、比較月がなければ空', () => {
+  it('控除合計0円で控除の項目が無い月は、控除を比べず、支給の「変化なし」を明示できる', () => {
+    // 当月: 控除合計0円・控除項目なし（未登録ではない可能性がある）。前月: 控除項目あり。支給の項目は同額。
+    const removedDeduction = [{ label: '住民税', category: 'deduction' as const, amount: -12_000, change: 'removed' as const }];
+    const result = comparableItemChanges(removedDeduction, { items: [item('earning')] }, { items: [item('earning'), item('deduction')] });
+    expect(result.notCompared).toEqual(['deduction']);
+    expect(result.items).toEqual([]);
+    expect(result.unchanged).toEqual(['earning']);
+  });
+
+  it('両月とも項目があれば全件、比較月がなければ空', () => {
     const both = { items: [item('earning'), item('deduction')] };
-    expect(comparableItemChanges(diffItems, both, both)).toEqual({ items: diffItems, unregistered: [] });
-    expect(comparableItemChanges(diffItems, both, null)).toEqual({ items: [], unregistered: [] });
+    expect(comparableItemChanges(diffItems, both, both)).toEqual({ items: diffItems, notCompared: [], unchanged: [] });
+    expect(comparableItemChanges(diffItems, both, null)).toEqual({ items: [], notCompared: [], unchanged: [] });
+    expect(comparableItemChanges([], both, both).unchanged).toEqual(['earning', 'deduction']);
   });
 
-  it('調整の有無は未登録扱いにしない', () => {
+  it('調整の有無は比較から外す理由にしない', () => {
     const current = { items: [item('earning'), item('deduction'), item('adjustment')] };
     const previous = { items: [item('earning'), item('deduction')] };
-    expect(comparableItemChanges([], current, previous).unregistered).toEqual([]);
+    expect(comparableItemChanges([], current, previous).notCompared).toEqual([]);
   });
 });

@@ -55,7 +55,8 @@ export function TabBar<K extends string>({ tabs, selected, onSelect, disabled }:
               ]}
             >
               <Icon name={tab.icon} size={22} color={fg} />
-              <Text style={[styles.label, { color: fg }, isSelected && styles.labelSelected]} maxFontSizeMultiplier={1.2} numberOfLines={1}>
+              {/* 省略記号にしない。幅が足りない時（320px・文字拡大）は2行に折り返す */}
+              <Text style={[styles.label, { color: fg }, isSelected && styles.labelSelected]} maxFontSizeMultiplier={1.2}>
                 {tab.label}
               </Text>
             </Pressable>
@@ -94,8 +95,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 2,
     borderRadius: 28,
-    paddingHorizontal: 2,
+    paddingHorizontal: 0,
+    paddingVertical: 4,
   },
-  label: { ...fontBase, fontSize: 11, lineHeight: 14, fontWeight: '600' },
+  label: { ...fontBase, fontSize: 11, lineHeight: 14, fontWeight: '600', textAlign: 'center' },
   labelSelected: { fontWeight: '800' },
 });

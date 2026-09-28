@@ -1,4 +1,4 @@
-import React, { ReactNode, useState } from 'react';
+import React, { ReactNode, useEffect, useId, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -28,6 +28,8 @@ import { colors, focusRing, focusRingOnDark, fontBase, radius, shadow, space, TO
 import { DeltaEmphasis, SplitBarModel, splitYen, tileColumns } from './visual';
 
 type PressState = PressableStateCallbackType & { focused?: boolean; hovered?: boolean };
+
+const IS_WEB = Platform.OS === 'web';
 
 const isFocused = (state: PressableStateCallbackType) => !!(state as PressState).focused;
 
@@ -271,16 +273,19 @@ export function DeltaChip({ value, suffix, emphasis = 'direction', onStage }: {
 }) {
   const tone = value === 0 || emphasis === 'neutral' ? DELTA_TONE.neutral : value > 0 ? DELTA_TONE.up : DELTA_TONE.down;
   const icon: IconName = value > 0 ? 'arrowUpRight' : value < 0 ? 'arrowDownRight' : 'minus';
+  // Webでは役割のない要素の aria-label が読まれないことがあるため、見える文字そのものを読ませる。
+  // 比較先（suffix）は画面に書かれていない場合だけ、読み上げ専用の文字として足す。
   return (
     <View
-      accessible
-      accessibilityLabel={`${signedSpeech(value)}${suffix ?? ''}`}
+      accessible={!IS_WEB}
+      accessibilityLabel={IS_WEB ? undefined : `${signedSpeech(value)}${suffix ?? ''}`}
       style={[styles.chip, { backgroundColor: onStage ? colors.surface : tone.bg }]}
     >
       <Icon name={icon} size={16} color={tone.fg} strokeWidth={2} />
       <Text style={[type.moneyS, { color: tone.fg, flexShrink: 1 }]} maxFontSizeMultiplier={1.6}>
         {signedYen(value)}
         <Text style={styles.chipWord}>{` ${changeWord(value)}`}</Text>
+        {IS_WEB && suffix ? <Text style={styles.srOnly}>{suffix}</Text> : null}
       </Text>
     </View>
   );
@@ -295,6 +300,8 @@ export interface StatItem {
   label: string;
   value: number;
   color: string;
+  // legend: 割合帯の凡例を兼ねる（帯と同じ四角の見本。0円で帯に区画が無い時は枠だけ）
+  marker?: 'dot' | 'legend';
 }
 
 // 数値タイルの組。列数と文字サイズは内幅と最長の金額から決める（visual.tileColumns）。
@@ -311,17 +318,22 @@ export function StatTiles({ items, width, spacing }: {
       {items.map((item) => (
         <View key={item.label} style={[styles.tile, { padding: layout.padding }, layout.columns === 2 && { flex: 1 }]}>
           <View style={styles.tileLabelRow}>
-            <View style={[styles.dot, { backgroundColor: item.color }]} />
+            {item.marker === 'legend' ? (
+              <View
+                style={[
+                  styles.legendSwatch,
+                  item.value === 0
+                    ? { borderWidth: 1.5, borderColor: item.color, backgroundColor: colors.surface }
+                    : { backgroundColor: item.color },
+                ]}
+              />
+            ) : (
+              <View style={[styles.dot, { backgroundColor: item.color }]} />
+            )}
             <Text style={type.label}>{item.label}</Text>
           </View>
-          <YenText
-            value={item.value}
-            size={layout.fontSize}
-            weight="700"
-            unitRatio={0.7}
-            maxScale={1.6}
-            accessibilityLabel={`${item.label} ${yenSpeech(item.value)}`}
-          />
+          {/* ラベルは上の文字で読むので、金額側は金額だけを読む */}
+          <YenText value={item.value} size={layout.fontSize} weight="700" unitRatio={0.7} maxScale={1.6} />
         </View>
       ))}
     </View>
@@ -329,38 +341,22 @@ export function StatTiles({ items, width, spacing }: {
 }
 
 // 総支給＝帯全体。手取りと控除合計を金額比の幅で並べ、0円の区画・最小幅は足さない。
+// 文字付きの凡例は、呼び出し側の数値タイル（marker="legend"）が兼ねる。
 export function SplitBar({ model }: { model: Extract<SplitBarModel, { visible: true }> }) {
   const label = `総支給${yenSpeech(model.grossPay)}のうち、手取り${yenSpeech(model.netPay)}、控除合計${yenSpeech(model.totalDeductions)}`;
   return (
-    <View>
-      <View style={[styles.splitBar, model.gap && { gap: 2 }]} accessible accessibilityRole="image" accessibilityLabel={label}>
-        {model.segments.map((segment) => (
-          <View
-            key={segment.kind}
-            style={{
-              flexGrow: segment.weight,
-              flexShrink: 1,
-              flexBasis: 0,
-              backgroundColor: segment.kind === 'net' ? colors.primary : colors.catDeduction,
-            }}
-          />
-        ))}
-      </View>
-      <View style={styles.legend} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        <LegendItem color={colors.primary} label="手取り" value={model.netPay} />
-        <LegendItem color={colors.catDeduction} label="控除合計" value={model.totalDeductions} />
-      </View>
-    </View>
-  );
-}
-
-function LegendItem({ color, label, value }: { color: string; label: string; value: number }) {
-  return (
-    <View style={styles.legendItem}>
-      <View style={[styles.legendSwatch, { backgroundColor: color }]} />
-      <Text style={[type.caption, { color: colors.ink }]}>
-        {label} <Text style={[type.moneyS, { fontSize: 12 }]}>{formatYen(value)}</Text>
-      </Text>
+    <View style={[styles.splitBar, model.gap && { gap: 2 }]} accessible accessibilityRole="image" accessibilityLabel={label}>
+      {model.segments.map((segment) => (
+        <View
+          key={segment.kind}
+          style={{
+            flexGrow: segment.weight,
+            flexShrink: 1,
+            flexBasis: 0,
+            backgroundColor: segment.kind === 'net' ? colors.primary : colors.catDeduction,
+          }}
+        />
+      ))}
     </View>
   );
 }
@@ -583,15 +579,28 @@ export function Dialog({ visible, title, children, onClose, actions, placement =
   actions: ReactNode;
   placement?: 'auto' | 'center';
 }) {
+  const titleId = `dialog-title-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
+  // Web: 開いた操作。閉じた後にここへフォーカスを戻す。
+  const openerRef = useRef<HTMLElement | null>(null);
+  // RN Web の Modal は追加propsを role="dialog" の要素へ渡すので、そこへ見出しを名前として結び付ける。
+  const webLabel = IS_WEB ? ({ 'aria-labelledby': titleId } as object) : {};
+  // RN Web の Modal は閉じた直後も1回分フォーカスの囲い込みを残すため、囲い込みが外れた onDismiss で戻す。
+  const onDismiss = () => {
+    const target = openerRef.current;
+    openerRef.current = null;
+    if (IS_WEB && target && typeof document !== 'undefined' && document.contains(target)) target.focus();
+  };
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
-      {visible ? <DialogBody title={title} actions={actions} placement={placement}>{children}</DialogBody> : null}
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose} onDismiss={onDismiss} statusBarTranslucent {...webLabel}>
+      {visible ? <DialogBody title={title} titleId={titleId} openerRef={openerRef} actions={actions} placement={placement}>{children}</DialogBody> : null}
     </Modal>
   );
 }
 
-function DialogBody({ title, children, actions, placement }: {
+function DialogBody({ title, titleId, openerRef, children, actions, placement }: {
   title: string;
+  titleId: string;
+  openerRef: React.RefObject<HTMLElement | null>;
   children?: ReactNode;
   actions: ReactNode;
   placement: 'auto' | 'center';
@@ -603,6 +612,18 @@ function DialogBody({ title, children, actions, placement }: {
   const panel = useEnterAnimation(sheet
     ? { translateY: 24, duration: duration.slow }
     : { scale: 0.96, duration: duration.slow });
+  const titleRef = useRef<View>(null);
+
+  // Web: 開いた時は見出しにフォーカスを置く（削除・置換などの実行ボタンに置かない。Enterで確定しない）。
+  // RN Web の Modal はフォーカスが中に無い時だけ最初の要素へ移すので、先に見出しへ移しておけばそれを保つ。
+  // 開いた操作は記録しておき、閉じた後に Dialog の onDismiss で戻す。native の振る舞いは変えない。
+  useEffect(() => {
+    if (!IS_WEB || typeof document === 'undefined') return;
+    const active = document.activeElement;
+    openerRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
+    (titleRef.current as unknown as HTMLElement | null)?.focus?.();
+  }, [openerRef]);
+
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.scrim }, backdrop]} />
@@ -613,7 +634,6 @@ function DialogBody({ title, children, actions, placement }: {
         <Animated.View
           style={[sheet ? styles.sheet : styles.dialog, shadow.dialog, panel]}
           accessibilityViewIsModal
-          aria-modal
         >
           <ScrollView
             style={styles.dialogScroll}
@@ -621,7 +641,14 @@ function DialogBody({ title, children, actions, placement }: {
             keyboardShouldPersistTaps="handled"
             bounces={false}
           >
-            <Text style={[type.title, { marginBottom: space.md }]} accessibilityRole="header">{title}</Text>
+            {/* 見出しはスクリプトからだけフォーカスできる（Tab順には入れない） */}
+            <View
+              ref={titleRef}
+              tabIndex={IS_WEB ? -1 : undefined}
+              style={styles.dialogTitle}
+            >
+              <Text style={type.title} accessibilityRole="header" nativeID={titleId}>{title}</Text>
+            </View>
             {typeof children === 'string' ? <Text style={type.body}>{children}</Text> : children}
             <View style={styles.dialogActions}>{actions}</View>
           </ScrollView>
@@ -745,13 +772,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   chipWord: { ...fontBase, fontSize: 12, fontWeight: '600' },
+  // 見た目には出さず、読み上げだけに残す（Web専用）
+  srOnly: { position: 'absolute', width: 1, height: 1, overflow: 'hidden', opacity: 0 },
   tiles: { alignItems: 'stretch' },
   tile: { backgroundColor: colors.surfaceSunken, borderRadius: radius.md, gap: space.xs },
   tileLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   splitBar: { flexDirection: 'row', height: 12, borderRadius: radius.xs, overflow: 'hidden', backgroundColor: colors.surface },
-  legend: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space.lg, rowGap: space.xs, marginTop: space.sm },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendSwatch: { width: 10, height: 10, borderRadius: 3 },
   segmented: {
     flexDirection: 'row',
@@ -880,6 +907,8 @@ const styles = StyleSheet.create({
   },
   dialogScroll: { flexGrow: 0, flexShrink: 1 },
   dialogContent: { padding: 24 },
+  // 見出しはスクリプトでだけフォーカスする非操作要素なので、フォーカス枠を描かない
+  dialogTitle: { marginBottom: space.md, borderRadius: radius.sm, outlineWidth: 0 },
   dialogActions: { marginTop: space.xl, gap: space.sm },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.md, minHeight: 56, backgroundColor: colors.canvas },
   headerSide: { width: 104 },

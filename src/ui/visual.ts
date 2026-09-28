@@ -160,15 +160,27 @@ export function topItemChanges(items: ItemChange[], limit?: number): ItemChange[
 
 const BREAKDOWN_CATEGORIES: Category[] = ['earning', 'deduction'];
 
-// 支給・控除のどちらかの月で内訳が未登録なら、その区分の項目差は「追加/なくなった」ではなく比べられない。
+export interface ComparableItemChanges {
+  // 比べた区分の項目差
+  items: ItemChange[];
+  // どちらかの月にその区分の項目が1件もないため、項目を比べなかった区分。
+  // 「未登録」か「本当に0件（控除0円など）」かは区別できないので、事実だけを示す。
+  notCompared: Category[];
+  // 比べた支給・控除のうち、項目の差が1件もなかった区分
+  unchanged: Category[];
+}
+
+// 支給・控除のどちらかの月に項目が1件もなければ、その区分の差を「追加/なくなった」と見せずに比較から外す。
 // 調整は無い月が普通にあるため、この判定の対象にしない。
 export function comparableItemChanges(
   items: ItemChange[],
   current: Pick<Payslip, 'items'>,
   previous: Pick<Payslip, 'items'> | null,
-): { items: ItemChange[]; unregistered: Category[] } {
-  if (!previous) return { items: [], unregistered: [] };
+): ComparableItemChanges {
+  if (!previous) return { items: [], notCompared: [], unchanged: [] };
   const has = (p: Pick<Payslip, 'items'>, category: Category) => p.items.some((i) => i.category === category);
-  const unregistered = BREAKDOWN_CATEGORIES.filter((c) => !has(current, c) || !has(previous, c));
-  return { items: items.filter((i) => !unregistered.includes(i.category)), unregistered };
+  const notCompared = BREAKDOWN_CATEGORIES.filter((c) => !has(current, c) || !has(previous, c));
+  const compared = items.filter((i) => !notCompared.includes(i.category));
+  const unchanged = BREAKDOWN_CATEGORIES.filter((c) => !notCompared.includes(c) && !compared.some((i) => i.category === c));
+  return { items: compared, notCompared, unchanged };
 }

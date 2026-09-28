@@ -83,13 +83,11 @@ export function HomeScreen({ records, onAdd, onOpen, demo }: {
         accessibilityLabel={`手取り ${yenSpeech(latest.netPay)}`}
       />
       <View style={styles.deltaRow}>
+        {/* 比較先は見える文字として読ませる（チップ側では繰り返さない） */}
         {monthDiff ? (
           <>
-            <DeltaChip value={monthDiff.netPay} emphasis={deltaEmphasis('netPay')} onStage suffix={`、前月${prevMonth ? `（${monthLabel(prevMonth)}）` : ''}比`} />
-            {/* 読み上げはチップのラベルに含めるので、ここは見た目だけ */}
-            <Text style={styles.stageCaption} accessibilityElementsHidden importantForAccessibility="no" aria-hidden>
-              前月{prevMonth ? `（${monthLabel(prevMonth)}）` : ''}比
-            </Text>
+            <DeltaChip value={monthDiff.netPay} emphasis={deltaEmphasis('netPay')} onStage />
+            <Text style={styles.stageCaption}>前月{prevMonth ? `（${monthLabel(prevMonth)}）` : ''}比</Text>
           </>
         ) : (
           <View style={styles.noDataChip}>
@@ -99,17 +97,23 @@ export function HomeScreen({ records, onAdd, onOpen, demo }: {
           </View>
         )}
       </View>
-      <Text style={[styles.stageCaption, { marginTop: space.sm }]}>
-        前年同月{prevYear ? `（${monthLabel(prevYear)}）` : ''}
-        {yearDiff ? `比 ${signedYen(yearDiff.netPay)} ${changeWord(yearDiff.netPay)}` : 'のデータなし'}
-      </Text>
+      {/* 前年同月はデータがある時だけ。無い時は比較カードの「前年同月」で「データなし」と示す。 */}
+      {yearDiff ? (
+        <Text style={[styles.stageCaption, { marginTop: space.sm }]}>
+          前年同月{prevYear ? `（${monthLabel(prevYear)}）` : ''}比 {signedYen(yearDiff.netPay)} {changeWord(yearDiff.netPay)}
+        </Text>
+      ) : null}
     </Stage>,
     <>
-      {/* 内訳シート（主な情報なので入場の動きを付けない） */}
+      {/* 内訳シート（主な情報なので入場の動きを付けない）。値は各1回: 総支給は見出し、手取り・控除合計は帯の凡例を兼ねるタイル。 */}
       <View style={[styles.sheet, shadow.sheet, { padding: metrics.sheetPadding, marginHorizontal: sheetInset }]}>
         <View style={styles.sheetHead}>
           <Text style={type.headline} accessibilityRole="header">内訳</Text>
-          {split.visible ? <Text style={type.caption}>帯の全体＝総支給</Text> : null}
+          {split.visible ? (
+            <Text style={[type.caption, styles.grossNote]}>
+              総支給（帯の全体） <Text style={styles.grossValue}>{formatYen(latest.grossPay)}</Text>
+            </Text>
+          ) : null}
         </View>
         {split.visible
           ? <SplitBar model={split} />
@@ -118,19 +122,24 @@ export function HomeScreen({ records, onAdd, onOpen, demo }: {
           <StatTiles
             width={sheetInner}
             spacing={metrics.tile}
-            items={[
-              { label: '総支給', value: latest.grossPay, color: colors.catEarning },
-              { label: '控除合計', value: latest.totalDeductions, color: colors.catDeduction },
-            ]}
+            items={split.visible
+              ? [
+                { label: '手取り', value: latest.netPay, color: colors.primary, marker: 'legend' },
+                { label: '控除合計', value: latest.totalDeductions, color: colors.catDeduction, marker: 'legend' },
+              ]
+              : [
+                { label: '総支給', value: latest.grossPay, color: colors.catEarning },
+                { label: '控除合計', value: latest.totalDeductions, color: colors.catDeduction },
+              ]}
           />
         </View>
-        <View style={{ marginTop: space.sm }}>
+        <View style={{ marginTop: space.xs }}>
           <Row label="この明細を詳しく見る" onPress={() => onOpen(latest.id)} accessibilityLabel="この明細を詳しく見る" />
         </View>
       </View>
 
       <EnterView translateY={12} delay={0}>
-        <SectionTitle note="「–」の月は未登録。0円は線上の印で表示します">手取りの推移</SectionTitle>
+        <SectionTitle>手取りの推移</SectionTitle>
         <Card>
           <TrendChart key={year} records={records} initialYear={year} highlightMonth={latest.month} />
         </Card>
@@ -205,7 +214,7 @@ function MethodLine({ text }: { text: string }) {
 }
 
 const styles = StyleSheet.create({
-  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 48, marginBottom: space.md },
+  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44, marginBottom: space.sm },
   appName: { ...fontBase, color: colors.onPrimaryMuted, fontSize: 14, fontWeight: '700', letterSpacing: 0.5 },
   monthRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.sm, marginBottom: space.xs },
   stageLabel: { ...fontBase, color: colors.onPrimaryMuted, fontSize: 15, lineHeight: 21, fontWeight: '600' },
@@ -247,7 +256,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
   },
-  sheetHead: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: space.sm, marginBottom: space.md },
+  sheetHead: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', columnGap: space.sm, rowGap: space.xxs, marginBottom: space.md },
+  grossNote: { marginLeft: 'auto', textAlign: 'right' },
+  grossValue: { ...fontBase, color: colors.ink, fontSize: 15, fontWeight: '700', fontVariant: ['tabular-nums'] },
   methodLine: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md, paddingVertical: space.xs },
   methodDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary, marginTop: 9 },
 });

@@ -61,17 +61,8 @@ export function TrendChart({ records, initialYear, highlightMonth }: {
       </View>
 
       {/* 年の切替では新しい年の内容だけをフェードする。棒の高さ・位置は動かさない（M7）。 */}
+      {/* 表示中の月は濃い棒と太字の月で示す。金額はステージと数値一覧にあるので、ここでは繰り返さない。 */}
       <EnterView key={year} opacity={0.4} duration={duration.release}>
-        {highlighted && highlighted.netPay !== null ? (
-          <View style={styles.highlight}>
-            <View style={[styles.swatch, { backgroundColor: colors.barStrong }]} />
-            <Text style={[type.caption, { flex: 1 }]}>
-              表示中の月 <Text style={{ color: colors.ink, fontWeight: '700' }}>{monthLabel(highlighted.month)}</Text>
-            </Text>
-            <Text style={type.moneyM} accessibilityLabel={yenSpeech(highlighted.netPay)}>{formatYen(highlighted.netPay)}</Text>
-          </View>
-        ) : null}
-
         <View style={styles.chart} accessible accessibilityRole="image" accessibilityLabel={summary}>
           {/* 0円の基準線。負の値がある年は途中に、無い年は下端に来る。 */}
           <View style={[styles.baseline, { top: layout.baseline }]} />
@@ -105,7 +96,10 @@ export function TrendChart({ records, initialYear, highlightMonth }: {
       <View style={styles.legend}>
         <View style={styles.legendItem}><View style={[styles.swatch, styles.barPositive]} /><Text style={type.caption}>手取り（塗り）</Text></View>
         {highlighted ? (
-          <View style={styles.legendItem}><View style={[styles.swatch, styles.barStrong]} /><Text style={type.caption}>表示中の月（濃い塗り）</Text></View>
+          <View style={styles.legendItem}>
+            <View style={[styles.swatch, styles.barStrong]} />
+            <Text style={type.caption}>表示中の月（濃い塗り・{Number(highlighted.month.slice(5, 7))}月）</Text>
+          </View>
         ) : null}
         {hasNegative ? (
           <View style={styles.legendItem}><View style={[styles.swatch, styles.barNegative]} /><Text style={type.caption}>マイナス（枠のみ・線より下）</Text></View>
@@ -145,17 +139,6 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: space.xxs, marginLeft: -space.xs, marginBottom: space.sm },
   year: { minWidth: 64, textAlign: 'center', fontVariant: ['tabular-nums'] },
   count: { marginLeft: 'auto' },
-  highlight: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: space.sm,
-    backgroundColor: colors.surfaceSunken,
-    borderRadius: radius.md,
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm,
-    marginBottom: space.md,
-  },
   chart: { flexDirection: 'row', alignItems: 'flex-start', height: BAR_AREA + 22, gap: 4 },
   // 0円の基準線は意味を持つ図形なので3:1以上の色
   baseline: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: colors.inkMuted },

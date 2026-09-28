@@ -53,11 +53,9 @@ export function DifferenceSummary({ title, targetMonth, difference, compact }: {
   );
 }
 
-const UNREGISTERED_NOTE: Record<Category, string> = {
-  earning: '支給の内訳が未登録の月があるため、支給の項目は比べていません。',
-  deduction: '控除の内訳が未登録の月があるため、控除の項目は比べていません。',
-  adjustment: '',
-};
+// 項目が無い理由（未登録か、控除0円などで本当に無いか）は判別できないので、事実だけを書く。
+const notComparedNote = (category: Category) =>
+  `どちらかの月に${CATEGORY_SHORT[category]}の項目が登録されていないため、${CATEGORY_SHORT[category]}の項目は比べていません。`;
 
 function ItemChanges({ difference, current, previous, limit }: {
   difference: Difference;
@@ -65,12 +63,16 @@ function ItemChanges({ difference, current, previous, limit }: {
   previous: Payslip | null;
   limit?: number;
 }) {
-  const { items, unregistered } = comparableItemChanges(difference.items, current, previous);
+  const { items, notCompared, unchanged } = comparableItemChanges(difference.items, current, previous);
   const shown = topItemChanges(items, limit);
   return (
     <View>
-      {shown.length === 0 && unregistered.length === 0 ? (
+      {items.length === 0 && notCompared.length === 0 ? (
         <Text style={type.bodyMuted}>項目ごとの金額に変化はありません。</Text>
+      ) : null}
+      {/* 一方の区分を比べなかった時は、比べた区分の「変化なし」も明示する */}
+      {notCompared.length > 0 && unchanged.length > 0 ? (
+        <Text style={type.bodyMuted}>{unchanged.map((c) => `${CATEGORY_SHORT[c]}の項目に変化はありません。`).join('')}</Text>
       ) : null}
       {shown.map((item, index) => (
         <View key={`${item.category}-${item.label}-${index}`}>
@@ -87,10 +89,10 @@ function ItemChanges({ difference, current, previous, limit }: {
           </Row>
         </View>
       ))}
-      {unregistered.map((category) => (
+      {notCompared.map((category) => (
         <View key={category} style={styles.note}>
           <Icon name="info" size={16} color={colors.inkMuted} />
-          <Text style={[type.caption, { flex: 1 }]}>{UNREGISTERED_NOTE[category]}</Text>
+          <Text style={[type.caption, { flex: 1 }]}>{notComparedNote(category)}</Text>
         </View>
       ))}
     </View>
